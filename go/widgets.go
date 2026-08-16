@@ -33,6 +33,27 @@ func natyvGetTextHost(uint64) uint64
 //go:wasmimport extism:host/user natyv_destroy_widget
 func natyvDestroyWidgetHost(uint64) uint64
 
+//go:wasmimport extism:host/user natyv_create_checkbox
+func natyvCreateCheckboxHost(uint64) uint64
+
+//go:wasmimport extism:host/user natyv_create_radio_button
+func natyvCreateRadioButtonHost(uint64) uint64
+
+//go:wasmimport extism:host/user natyv_create_progressbar
+func natyvCreateProgressBarHost(uint64) uint64
+
+//go:wasmimport extism:host/user natyv_set_checked
+func natyvSetCheckedHost(uint64) uint64
+
+//go:wasmimport extism:host/user natyv_get_checked
+func natyvGetCheckedHost(uint64) uint64
+
+//go:wasmimport extism:host/user natyv_set_value
+func natyvSetValueHost(uint64) uint64
+
+//go:wasmimport extism:host/user natyv_get_value
+func natyvGetValueHost(uint64) uint64
+
 // Button, TextField, and Label are typed widget handles (over the same
 // underlying host-assigned widget_id) rather than raw ints, so app code
 // reads as `addButton.OnClick(handleAdd)` instead of tracking which uint32
@@ -120,6 +141,182 @@ func CreateLabel(x, y float32, text string) (Label, error) {
 func (l Label) SetText(text string) error { return setText(uint32(l), text) }
 func (l Label) Text() (string, error)     { return getText(uint32(l)) }
 func (l Label) Destroy()                  { destroyWidget(uint32(l)) }
+
+// Checkbox, RadioButton, and ProgressBar are typed handles the same way
+// Button/TextField/Label are -- W1 widget breadth, added once the keyboard
+// interaction model (focus/Tab/Enter/Space) already covered how a checkbox
+// or radio button gets activated, so nothing about dispatch needed to
+// change: OnClick already works unchanged, since it's generic over any
+// widget_id.
+type Checkbox uint32
+type RadioButton uint32
+type ProgressBar uint32
+
+func CreateCheckbox(x, y, w, h float32, label string) (Checkbox, error) {
+	body, err := json.Marshal(struct {
+		X     float32 `json:"x"`
+		Y     float32 `json:"y"`
+		W     float32 `json:"w"`
+		H     float32 `json:"h"`
+		Label string  `json:"label"`
+	}{x, y, w, h, label})
+	if err != nil {
+		return 0, err
+	}
+	var resp widgetResponse
+	if err := json.Unmarshal(pdk.ParamBytes(natyvCreateCheckboxHost(pdk.ResultBytes(body))), &resp); err != nil {
+		return 0, err
+	}
+	if resp.Error != "" {
+		return 0, errors.New(resp.Error)
+	}
+	return Checkbox(resp.WidgetID), nil
+}
+
+func (cb Checkbox) SetLabel(label string) error   { return setText(uint32(cb), label) }
+func (cb Checkbox) Label() (string, error)        { return getText(uint32(cb)) }
+func (cb Checkbox) Checked() (bool, error)        { return getChecked(uint32(cb)) }
+func (cb Checkbox) SetChecked(checked bool) error { return setChecked(uint32(cb), checked) }
+func (cb Checkbox) OnClick(handler func() error)  { registerClick(uint32(cb), handler) }
+func (cb Checkbox) Destroy()                      { destroyWidget(uint32(cb)) }
+
+// CreateRadioButton's groupID is an arbitrary tag the app picks -- every
+// radio button sharing the same groupID is mutually exclusive (selecting
+// one deselects the others in its group). Not derived from anything else
+// natyv tracks, so any uint32 the app finds convenient works.
+func CreateRadioButton(x, y, w, h float32, groupID uint32, label string) (RadioButton, error) {
+	body, err := json.Marshal(struct {
+		X       float32 `json:"x"`
+		Y       float32 `json:"y"`
+		W       float32 `json:"w"`
+		H       float32 `json:"h"`
+		Label   string  `json:"label"`
+		GroupID uint32  `json:"group_id"`
+	}{x, y, w, h, label, groupID})
+	if err != nil {
+		return 0, err
+	}
+	var resp widgetResponse
+	if err := json.Unmarshal(pdk.ParamBytes(natyvCreateRadioButtonHost(pdk.ResultBytes(body))), &resp); err != nil {
+		return 0, err
+	}
+	if resp.Error != "" {
+		return 0, errors.New(resp.Error)
+	}
+	return RadioButton(resp.WidgetID), nil
+}
+
+func (r RadioButton) SetLabel(label string) error  { return setText(uint32(r), label) }
+func (r RadioButton) Label() (string, error)       { return getText(uint32(r)) }
+func (r RadioButton) Checked() (bool, error)       { return getChecked(uint32(r)) }
+func (r RadioButton) Select() error                { return setChecked(uint32(r), true) }
+func (r RadioButton) OnClick(handler func() error) { registerClick(uint32(r), handler) }
+func (r RadioButton) Destroy()                     { destroyWidget(uint32(r)) }
+
+func CreateProgressBar(x, y, w, h float32, value float32) (ProgressBar, error) {
+	body, err := json.Marshal(struct {
+		X     float32 `json:"x"`
+		Y     float32 `json:"y"`
+		W     float32 `json:"w"`
+		H     float32 `json:"h"`
+		Value float32 `json:"value"`
+	}{x, y, w, h, value})
+	if err != nil {
+		return 0, err
+	}
+	var resp widgetResponse
+	if err := json.Unmarshal(pdk.ParamBytes(natyvCreateProgressBarHost(pdk.ResultBytes(body))), &resp); err != nil {
+		return 0, err
+	}
+	if resp.Error != "" {
+		return 0, errors.New(resp.Error)
+	}
+	return ProgressBar(resp.WidgetID), nil
+}
+
+func (p ProgressBar) Value() (float32, error)      { return getValue(uint32(p)) }
+func (p ProgressBar) SetValue(value float32) error { return setValue(uint32(p), value) }
+func (p ProgressBar) Destroy()                     { destroyWidget(uint32(p)) }
+
+func setChecked(id uint32, checked bool) error {
+	body, err := json.Marshal(struct {
+		WidgetID uint32 `json:"widget_id"`
+		Checked  bool   `json:"checked"`
+	}{id, checked})
+	if err != nil {
+		return err
+	}
+	var resp struct {
+		Error string `json:"error,omitempty"`
+	}
+	if err := json.Unmarshal(pdk.ParamBytes(natyvSetCheckedHost(pdk.ResultBytes(body))), &resp); err != nil {
+		return err
+	}
+	if resp.Error != "" {
+		return errors.New(resp.Error)
+	}
+	return nil
+}
+
+func getChecked(id uint32) (bool, error) {
+	body, err := json.Marshal(struct {
+		WidgetID uint32 `json:"widget_id"`
+	}{id})
+	if err != nil {
+		return false, err
+	}
+	var resp struct {
+		Checked bool   `json:"checked"`
+		Error   string `json:"error,omitempty"`
+	}
+	if err := json.Unmarshal(pdk.ParamBytes(natyvGetCheckedHost(pdk.ResultBytes(body))), &resp); err != nil {
+		return false, err
+	}
+	if resp.Error != "" {
+		return false, errors.New(resp.Error)
+	}
+	return resp.Checked, nil
+}
+
+func setValue(id uint32, value float32) error {
+	body, err := json.Marshal(struct {
+		WidgetID uint32  `json:"widget_id"`
+		Value    float32 `json:"value"`
+	}{id, value})
+	if err != nil {
+		return err
+	}
+	var resp struct {
+		Error string `json:"error,omitempty"`
+	}
+	if err := json.Unmarshal(pdk.ParamBytes(natyvSetValueHost(pdk.ResultBytes(body))), &resp); err != nil {
+		return err
+	}
+	if resp.Error != "" {
+		return errors.New(resp.Error)
+	}
+	return nil
+}
+
+func getValue(id uint32) (float32, error) {
+	body, err := json.Marshal(struct {
+		WidgetID uint32 `json:"widget_id"`
+	}{id})
+	if err != nil {
+		return 0, err
+	}
+	var resp struct {
+		Value float32 `json:"value"`
+		Error string  `json:"error,omitempty"`
+	}
+	if err := json.Unmarshal(pdk.ParamBytes(natyvGetValueHost(pdk.ResultBytes(body))), &resp); err != nil {
+		return 0, err
+	}
+	if resp.Error != "" {
+		return 0, errors.New(resp.Error)
+	}
+	return resp.Value, nil
+}
 
 func setText(id uint32, text string) error {
 	body, err := json.Marshal(struct {

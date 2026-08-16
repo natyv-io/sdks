@@ -40,6 +40,15 @@ func natyvClayCreateTextFieldHost(uint64) uint64
 //go:wasmimport extism:host/user natyv_clay_create_label
 func natyvClayCreateLabelHost(uint64) uint64
 
+//go:wasmimport extism:host/user natyv_clay_create_checkbox
+func natyvClayCreateCheckboxHost(uint64) uint64
+
+//go:wasmimport extism:host/user natyv_clay_create_radio_button
+func natyvClayCreateRadioButtonHost(uint64) uint64
+
+//go:wasmimport extism:host/user natyv_clay_create_progressbar
+func natyvClayCreateProgressBarHost(uint64) uint64
+
 //go:wasmimport extism:host/user natyv_destroy_widget
 func natyvDestroyWidgetHost(uint64) uint64
 
@@ -215,6 +224,57 @@ func CreateLabel(layout Layout, text string) (natyv.Label, error) {
 		return 0, err
 	}
 	return natyv.Label(resp.WidgetID), nil
+}
+
+// W1: Checkbox/RadioButton/ProgressBar handles returned here are the exact
+// same base `natyv` package types Button/TextField/Label already are --
+// natyv_set_checked/natyv_get_checked/natyv_set_value/natyv_get_value work
+// identically regardless of which create call produced the widget_id.
+func CreateCheckbox(layout Layout, label string) (natyv.Checkbox, error) {
+	body, err := json.Marshal(struct {
+		Layout Layout `json:"layout"`
+		Label  string `json:"label"`
+	}{layout, label})
+	if err != nil {
+		return 0, err
+	}
+	resp, err := decodeWidgetResponse(natyvClayCreateCheckboxHost(pdk.ResultBytes(body)))
+	if err != nil {
+		return 0, err
+	}
+	return natyv.Checkbox(resp.WidgetID), nil
+}
+
+// groupID -- see the base package's CreateRadioButton doc comment.
+func CreateRadioButton(layout Layout, groupID uint32, label string) (natyv.RadioButton, error) {
+	body, err := json.Marshal(struct {
+		Layout  Layout `json:"layout"`
+		Label   string `json:"label"`
+		GroupID uint32 `json:"group_id"`
+	}{layout, label, groupID})
+	if err != nil {
+		return 0, err
+	}
+	resp, err := decodeWidgetResponse(natyvClayCreateRadioButtonHost(pdk.ResultBytes(body)))
+	if err != nil {
+		return 0, err
+	}
+	return natyv.RadioButton(resp.WidgetID), nil
+}
+
+func CreateProgressBar(layout Layout, value float32) (natyv.ProgressBar, error) {
+	body, err := json.Marshal(struct {
+		Layout Layout  `json:"layout"`
+		Value  float32 `json:"value"`
+	}{layout, value})
+	if err != nil {
+		return 0, err
+	}
+	resp, err := decodeWidgetResponse(natyvClayCreateProgressBarHost(pdk.ResultBytes(body)))
+	if err != nil {
+		return 0, err
+	}
+	return natyv.ProgressBar(resp.WidgetID), nil
 }
 
 // decodeWidgetResponse factors out the shared response-decoding boilerplate
