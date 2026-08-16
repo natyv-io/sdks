@@ -148,6 +148,13 @@ type Layout struct {
 	// host's enum parse instead of falling back to its default.
 	Direction      string    `json:"direction,omitempty"`
 	ChildAlignment Alignment `json:"child_alignment"`
+	// W2: clips this container's children to its own bounds and lets the
+	// mouse wheel scroll them -- only meaningful on a container with a
+	// bounded (non-Fit) size. Plain bools, unlike Direction/ChildAlignment
+	// above: an explicit `false` and an absent key both parse to the same
+	// Zig-side default, so no omitempty is needed here.
+	ScrollVertical   bool `json:"scroll_vertical"`
+	ScrollHorizontal bool `json:"scroll_horizontal"`
 }
 
 // ParentID builds a Layout whose ParentID points at an existing
