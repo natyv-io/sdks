@@ -182,6 +182,14 @@ type Layout struct {
 	// Escape and a guest-declared close Button are the only two ways to
 	// close one, see OnDismiss.
 	Modal bool `json:"modal"`
+	// W7: implies floating-style positioning on its own (don't also set
+	// Floating or Modal) -- anchored to a fixed screen corner
+	// (bottom-right, not configurable in v1) instead of below ParentID or
+	// centered. Set once, on a single persistent toast-stack container;
+	// individual toasts are plain children of it (see
+	// CreateContainer's durationMs param), stacking via ordinary flex
+	// layout, not their own Toast flag.
+	Toast bool `json:"toast"`
 }
 
 // ParentID builds a Layout whose ParentID points at an existing
@@ -205,11 +213,17 @@ type widgetResponse struct {
 // guest-chosen color -- see WidgetHost.zig's ClayContainerRequest doc
 // comment for why this isn't the start of a guest-controllable styling
 // system. Existing callers pass false for a plain layout-only container.
-func CreateContainer(layout Layout, background bool) (Container, error) {
+// W7: durationMs is 0 (the default) for a Container that never expires --
+// see WidgetHost.zig's Slot.expires_at_ms doc comment. Non-zero destroys
+// this Container (and every descendant -- host-driven expiry cascades,
+// unlike Destroy(), which stays explicit-per-child-only) automatically
+// once that many milliseconds have passed, no guest polling/timer needed.
+func CreateContainer(layout Layout, background bool, durationMs uint32) (Container, error) {
 	body, err := json.Marshal(struct {
 		Layout     Layout `json:"layout"`
 		Background bool   `json:"background"`
-	}{layout, background})
+		DurationMs uint32 `json:"duration_ms"`
+	}{layout, background, durationMs})
 	if err != nil {
 		return 0, err
 	}
