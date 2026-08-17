@@ -130,8 +130,10 @@ func (t TextField) OnChange(handler func(text string) error) { registerTextChang
 // OnBlur fires once, when this widget loses focus -- W6. Fired for any
 // widget kind host-side, but only meaningful to register here today since
 // TextField is the only kind with a real use for it (closing a Combobox's
-// options panel).
-func (t TextField) OnBlur(handler func() error) { registerBlur(uint32(t), handler) }
+// options panel). W9: handler receives newFocusID (0 = none) -- see
+// registerBlur's doc comment for why this matters (a widget within your
+// own composed panel gaining focus isn't the same as a real click-away).
+func (t TextField) OnBlur(handler func(newFocusID uint32) error) { registerBlur(uint32(t), handler) }
 
 // OnKeyNav fires on Up/Down/Enter while this TextField is focused -- W6,
 // built for Combobox: move a highlighted option / select it.

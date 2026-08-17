@@ -55,10 +55,15 @@ func registerTextChange(id uint32, handler func(text string) error) {
 }
 
 // blurHandlers is OnBlur -- W6, fired to whatever widget just lost focus
-// (any kind, not just TextField -- the host fires it generically).
-var blurHandlers = map[uint32]func() error{}
+// (any kind, not just TextField -- the host fires it generically). W9:
+// the handler receives newFocusID (0 = none) -- which widget focus moved
+// *to* -- a real gap found via Menu's submenu (clicking a submenu trigger
+// moves focus onto it, firing a blur on the level above in the very same
+// frame; without knowing where focus went, a handler can't tell "still
+// part of my own widget tree" apart from a real click-away).
+var blurHandlers = map[uint32]func(newFocusID uint32) error{}
 
-func registerBlur(id uint32, handler func() error) {
+func registerBlur(id uint32, handler func(newFocusID uint32) error) {
 	blurHandlers[id] = handler
 }
 
@@ -95,6 +100,10 @@ type textChangedPayload struct {
 
 type keyNavPayload struct {
 	Key string `json:"key"`
+}
+
+type blurPayload struct {
+	NewFocusID uint32 `json:"new_focus_id"`
 }
 
 // natyv_dispatch lives entirely in the SDK -- app code never needs its own
@@ -149,7 +158,12 @@ func natyvDispatchExport() int32 {
 		}
 	} else if event.EventType == "blur" {
 		if handler, ok := blurHandlers[event.WidgetID]; ok {
-			if err := handler(); err != nil {
+			var payload blurPayload
+			if err := json.Unmarshal([]byte(event.Payload), &payload); err != nil {
+				pdk.SetErrorString(err.Error())
+				return 1
+			}
+			if err := handler(payload.NewFocusID); err != nil {
 				pdk.SetErrorString(err.Error())
 				return 1
 			}
