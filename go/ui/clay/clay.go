@@ -158,6 +158,12 @@ type Layout struct {
 	// Zig-side default, so no omitempty is needed here.
 	ScrollVertical   bool `json:"scroll_vertical"`
 	ScrollHorizontal bool `json:"scroll_horizontal"`
+	// W4: layers this element (and its own children) on top of normal
+	// content instead of taking part in its parent's normal flex flow --
+	// e.g. a dropdown's options panel, positioned directly below whatever
+	// widget ParentID names. Same "plain bool, no omitempty" reasoning as
+	// ScrollVertical/ScrollHorizontal above.
+	Floating bool `json:"floating"`
 }
 
 // ParentID builds a Layout whose ParentID points at an existing
