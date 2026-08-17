@@ -122,6 +122,21 @@ func (t TextField) SetText(text string) error { return setText(uint32(t), text) 
 func (t TextField) Clear() error              { return t.SetText("") }
 func (t TextField) Destroy()                  { destroyWidget(uint32(t)) }
 
+// OnChange fires on every keystroke (append or backspace) -- W6, the first
+// event a TextField reports live, not just on-demand via Text(). See
+// EventQueue.zig's `.text_changed` doc comment on the host side.
+func (t TextField) OnChange(handler func(text string) error) { registerTextChange(uint32(t), handler) }
+
+// OnBlur fires once, when this widget loses focus -- W6. Fired for any
+// widget kind host-side, but only meaningful to register here today since
+// TextField is the only kind with a real use for it (closing a Combobox's
+// options panel).
+func (t TextField) OnBlur(handler func() error) { registerBlur(uint32(t), handler) }
+
+// OnKeyNav fires on Up/Down/Enter while this TextField is focused -- W6,
+// built for Combobox: move a highlighted option / select it.
+func (t TextField) OnKeyNav(handler func(key string) error) { registerKeyNav(uint32(t), handler) }
+
 func CreateLabel(x, y float32, text string) (Label, error) {
 	body, err := json.Marshal(struct {
 		X    float32 `json:"x"`

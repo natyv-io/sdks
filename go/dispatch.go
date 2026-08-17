@@ -44,6 +44,33 @@ func RegisterDismiss(id uint32, handler func() error) {
 	dismissHandlers[id] = handler
 }
 
+// textChangeHandlers is the OnChange counterpart for TextField -- W6, fired
+// after every keystroke (append or backspace). TextField lives in this same
+// package (widgets.go), so this stays unexported like registerClick/
+// registerChange, unlike RegisterDismiss above.
+var textChangeHandlers = map[uint32]func(text string) error{}
+
+func registerTextChange(id uint32, handler func(text string) error) {
+	textChangeHandlers[id] = handler
+}
+
+// blurHandlers is OnBlur -- W6, fired to whatever widget just lost focus
+// (any kind, not just TextField -- the host fires it generically).
+var blurHandlers = map[uint32]func() error{}
+
+func registerBlur(id uint32, handler func() error) {
+	blurHandlers[id] = handler
+}
+
+// keyNavHandlers is OnKeyNav -- W6, fired to a focused TextField on
+// Up/Down/Enter, so a Combobox can move its highlight / select the
+// highlighted option. Never fired for any other widget kind.
+var keyNavHandlers = map[uint32]func(key string) error{}
+
+func registerKeyNav(id uint32, handler func(key string) error) {
+	keyNavHandlers[id] = handler
+}
+
 type dispatchEvent struct {
 	WidgetID  uint32 `json:"widget_id"`
 	EventType string `json:"event_type"`
@@ -60,6 +87,14 @@ type dispatchEvent struct {
 
 type changePayload struct {
 	Value float32 `json:"value"`
+}
+
+type textChangedPayload struct {
+	Text string `json:"text"`
+}
+
+type keyNavPayload struct {
+	Key string `json:"key"`
 }
 
 // natyv_dispatch lives entirely in the SDK -- app code never needs its own
@@ -96,6 +131,37 @@ func natyvDispatchExport() int32 {
 	} else if event.EventType == "dismiss" {
 		if handler, ok := dismissHandlers[event.WidgetID]; ok {
 			if err := handler(); err != nil {
+				pdk.SetErrorString(err.Error())
+				return 1
+			}
+		}
+	} else if event.EventType == "text_changed" {
+		if handler, ok := textChangeHandlers[event.WidgetID]; ok {
+			var payload textChangedPayload
+			if err := json.Unmarshal([]byte(event.Payload), &payload); err != nil {
+				pdk.SetErrorString(err.Error())
+				return 1
+			}
+			if err := handler(payload.Text); err != nil {
+				pdk.SetErrorString(err.Error())
+				return 1
+			}
+		}
+	} else if event.EventType == "blur" {
+		if handler, ok := blurHandlers[event.WidgetID]; ok {
+			if err := handler(); err != nil {
+				pdk.SetErrorString(err.Error())
+				return 1
+			}
+		}
+	} else if event.EventType == "key_nav" {
+		if handler, ok := keyNavHandlers[event.WidgetID]; ok {
+			var payload keyNavPayload
+			if err := json.Unmarshal([]byte(event.Payload), &payload); err != nil {
+				pdk.SetErrorString(err.Error())
+				return 1
+			}
+			if err := handler(payload.Key); err != nil {
 				pdk.SetErrorString(err.Error())
 				return 1
 			}
