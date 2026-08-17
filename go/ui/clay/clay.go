@@ -49,6 +49,9 @@ func natyvClayCreateRadioButtonHost(uint64) uint64
 //go:wasmimport extism:host/user natyv_clay_create_progressbar
 func natyvClayCreateProgressBarHost(uint64) uint64
 
+//go:wasmimport extism:host/user natyv_clay_create_slider
+func natyvClayCreateSliderHost(uint64) uint64
+
 //go:wasmimport extism:host/user natyv_destroy_widget
 func natyvDestroyWidgetHost(uint64) uint64
 
@@ -138,10 +141,10 @@ const (
 // otherwise (any Clay-managed widget can be a parent, not just Container,
 // though a leaf with children is an unusual layout to build on purpose).
 type Layout struct {
-	ParentID       *uint32   `json:"parent_id,omitempty"`
-	Sizing         Sizing    `json:"sizing"`
-	Padding        Padding   `json:"padding"`
-	ChildGap uint16 `json:"child_gap"`
+	ParentID *uint32 `json:"parent_id,omitempty"`
+	Sizing   Sizing  `json:"sizing"`
+	Padding  Padding `json:"padding"`
+	ChildGap uint16  `json:"child_gap"`
 	// `omitempty`: a Layout that never sets Direction (any leaf widget with
 	// no children of its own) must not send `"direction":""` -- see
 	// SizingAxis.Type's doc comment for why an empty string breaks the
@@ -282,6 +285,25 @@ func CreateProgressBar(layout Layout, value float32) (natyv.ProgressBar, error) 
 		return 0, err
 	}
 	return natyv.ProgressBar(resp.WidgetID), nil
+}
+
+// W3: Slider handle returned here is the same base `natyv` package type --
+// natyv_set_value/natyv_get_value/natyv_destroy_widget, and the OnChange
+// registration, all work identically regardless of which create call
+// produced the widget_id.
+func CreateSlider(layout Layout, value float32) (natyv.Slider, error) {
+	body, err := json.Marshal(struct {
+		Layout Layout  `json:"layout"`
+		Value  float32 `json:"value"`
+	}{layout, value})
+	if err != nil {
+		return 0, err
+	}
+	resp, err := decodeWidgetResponse(natyvClayCreateSliderHost(pdk.ResultBytes(body)))
+	if err != nil {
+		return 0, err
+	}
+	return natyv.Slider(resp.WidgetID), nil
 }
 
 // decodeWidgetResponse factors out the shared response-decoding boilerplate

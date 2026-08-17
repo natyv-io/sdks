@@ -42,6 +42,9 @@ func natyvCreateRadioButtonHost(uint64) uint64
 //go:wasmimport extism:host/user natyv_create_progressbar
 func natyvCreateProgressBarHost(uint64) uint64
 
+//go:wasmimport extism:host/user natyv_create_slider
+func natyvCreateSliderHost(uint64) uint64
+
 //go:wasmimport extism:host/user natyv_set_checked
 func natyvSetCheckedHost(uint64) uint64
 
@@ -152,6 +155,14 @@ type Checkbox uint32
 type RadioButton uint32
 type ProgressBar uint32
 
+// Slider is natyv's first host-authoritative interactive widget -- see
+// WidgetHost.zig's file doc comment for the full explanation. Value() and
+// SetValue() work the same as ProgressBar's (a guest can still set a
+// default), but the common case is the *host* changing the value via drag
+// or arrow-key nudge and telling the guest via OnChange, not the other way
+// around.
+type Slider uint32
+
 func CreateCheckbox(x, y, w, h float32, label string) (Checkbox, error) {
 	body, err := json.Marshal(struct {
 		X     float32 `json:"x"`
@@ -237,6 +248,32 @@ func CreateProgressBar(x, y, w, h float32, value float32) (ProgressBar, error) {
 func (p ProgressBar) Value() (float32, error)      { return getValue(uint32(p)) }
 func (p ProgressBar) SetValue(value float32) error { return setValue(uint32(p), value) }
 func (p ProgressBar) Destroy()                     { destroyWidget(uint32(p)) }
+
+func CreateSlider(x, y, w, h float32, value float32) (Slider, error) {
+	body, err := json.Marshal(struct {
+		X     float32 `json:"x"`
+		Y     float32 `json:"y"`
+		W     float32 `json:"w"`
+		H     float32 `json:"h"`
+		Value float32 `json:"value"`
+	}{x, y, w, h, value})
+	if err != nil {
+		return 0, err
+	}
+	var resp widgetResponse
+	if err := json.Unmarshal(pdk.ParamBytes(natyvCreateSliderHost(pdk.ResultBytes(body))), &resp); err != nil {
+		return 0, err
+	}
+	if resp.Error != "" {
+		return 0, errors.New(resp.Error)
+	}
+	return Slider(resp.WidgetID), nil
+}
+
+func (s Slider) Value() (float32, error)                    { return getValue(uint32(s)) }
+func (s Slider) SetValue(value float32) error               { return setValue(uint32(s), value) }
+func (s Slider) OnChange(handler func(value float32) error) { registerChange(uint32(s), handler) }
+func (s Slider) Destroy()                                   { destroyWidget(uint32(s)) }
 
 func setChecked(id uint32, checked bool) error {
 	body, err := json.Marshal(struct {
