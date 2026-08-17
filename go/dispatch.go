@@ -28,9 +28,29 @@ func registerChange(id uint32, handler func(value float32) error) {
 	changeHandlers[id] = handler
 }
 
+// dismissHandlers is the OnDismiss counterpart to clickHandlers -- W5,
+// fired to a modal's own widget id on Escape or a backdrop click. The host
+// never force-closes a modal; the guest decides here whether to actually
+// destroy its subtree, same discretion every other destroy/recreate widget
+// already has. Exported (unlike clickHandlers/registerClick, which never
+// needed to cross a package boundary) since Container -- the type a modal
+// root actually is -- lives in the sibling `clay` package, not here.
+var dismissHandlers = map[uint32]func() error{}
+
+// RegisterDismiss is exported for clay.Container.OnDismiss to call into --
+// see dismissHandlers' doc comment for why this one needs to be exported
+// where registerClick/registerChange don't.
+func RegisterDismiss(id uint32, handler func() error) {
+	dismissHandlers[id] = handler
+}
+
 type dispatchEvent struct {
 	WidgetID  uint32 `json:"widget_id"`
 	EventType string `json:"event_type"`
+	// W5: which modal (if any) WidgetID is nested under, or 0 (root/main
+	// surface) -- present on every event, not just modal-related ones, see
+	// FloatingOrder.surfaceIdFor's doc comment on the host side.
+	SurfaceID uint32 `json:"surface_id"`
 	// W3: absent/empty for "click" (never carried a payload before this),
 	// populated for "change" -- always a JSON-encoded string regardless of
 	// what's inside it, per Dispatch.zig's buildDispatchPayload on the host
@@ -69,6 +89,13 @@ func natyvDispatchExport() int32 {
 				return 1
 			}
 			if err := handler(payload.Value); err != nil {
+				pdk.SetErrorString(err.Error())
+				return 1
+			}
+		}
+	} else if event.EventType == "dismiss" {
+		if handler, ok := dismissHandlers[event.WidgetID]; ok {
+			if err := handler(); err != nil {
 				pdk.SetErrorString(err.Error())
 				return 1
 			}

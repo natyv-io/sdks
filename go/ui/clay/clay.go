@@ -60,6 +60,16 @@ func natyvDestroyWidgetHost(uint64) uint64
 // direction/padding/gap/alignment. See host-side widgets/Container.zig.
 type Container uint32
 
+// OnDismiss registers the handler for a modal's "please close" request --
+// fired on Escape or a backdrop click while this Container is the topmost
+// open modal (Layout.Modal was true at CreateContainer time). The host
+// never force-closes; the handler decides whether to actually destroy the
+// modal's subtree, same as any other guest-owned destroy/recreate widget.
+// Only meaningful on a modal root -- registering it on a plain Container
+// is harmless but never fires, since only a modal root's own widget id is
+// ever the target of a `.dismiss` event.
+func (c Container) OnDismiss(handler func() error) { natyv.RegisterDismiss(uint32(c), handler) }
+
 // SizingAxis mirrors Clay's own Clay_SizingAxis -- the four constructors
 // below (Fixed/Grow/Fit/Percent) match the ergonomics of Clay's real
 // CLAY_SIZING_FIXED/CLAY_SIZING_GROW/CLAY_SIZING_FIT/CLAY_SIZING_PERCENT
@@ -164,6 +174,14 @@ type Layout struct {
 	// widget ParentID names. Same "plain bool, no omitempty" reasoning as
 	// ScrollVertical/ScrollHorizontal above.
 	Floating bool `json:"floating"`
+	// W5: implies floating-style positioning on its own (don't also set
+	// Floating) but centers against the whole window instead of attaching
+	// below ParentID -- the host also gives it a backdrop and blocks input
+	// to everything outside it while open. A backdrop click never fires
+	// OnDismiss -- it only blocks (Quinn: "more idiomatic of modals").
+	// Escape and a guest-declared close Button are the only two ways to
+	// close one, see OnDismiss.
+	Modal bool `json:"modal"`
 }
 
 // ParentID builds a Layout whose ParentID points at an existing
@@ -183,10 +201,15 @@ type widgetResponse struct {
 	Error    string `json:"error,omitempty"`
 }
 
-func CreateContainer(layout Layout) (Container, error) {
+// W5: background is a fixed host-drawn panel fill/border, not a
+// guest-chosen color -- see WidgetHost.zig's ClayContainerRequest doc
+// comment for why this isn't the start of a guest-controllable styling
+// system. Existing callers pass false for a plain layout-only container.
+func CreateContainer(layout Layout, background bool) (Container, error) {
 	body, err := json.Marshal(struct {
-		Layout Layout `json:"layout"`
-	}{layout})
+		Layout     Layout `json:"layout"`
+		Background bool   `json:"background"`
+	}{layout, background})
 	if err != nil {
 		return 0, err
 	}
