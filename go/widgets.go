@@ -54,6 +54,9 @@ func natyvCreateSliderHost(uint64) uint64
 //go:wasmimport extism:host/user natyv_create_divider
 func natyvCreateDividerHost(uint64) uint64
 
+//go:wasmimport extism:host/user natyv_create_badge
+func natyvCreateBadgeHost(uint64) uint64
+
 //go:wasmimport extism:host/user natyv_set_checked
 func natyvSetCheckedHost(uint64) uint64
 
@@ -407,6 +410,52 @@ func CreateDivider(x, y, w, h float32) (Divider, error) {
 }
 
 func (d Divider) Destroy() { destroyWidget(uint32(d)) }
+
+// Badge is W14 -- a small filled pill with centered text, purely
+// decorative (no focus/click of its own). A dismissible tag is
+// guest-composed from a Badge plus an adjacent Button (OnClick), same
+// "guest composes it from primitives" precedent Breadcrumbs/Dialog already
+// established -- Badge itself has no dismiss button.
+type Badge uint32
+
+// BadgeTone is a small fixed set of semantic colors -- natyv has no way
+// for a guest to pick an arbitrary widget color yet (every widget's
+// palette is hardcoded host-side); see Badge.zig's own doc comment.
+type BadgeTone string
+
+const (
+	BadgeTonePrimary BadgeTone = "primary"
+	BadgeToneSuccess BadgeTone = "success"
+	BadgeToneWarning BadgeTone = "warning"
+	BadgeToneDanger  BadgeTone = "danger"
+	BadgeToneNeutral BadgeTone = "neutral"
+)
+
+func CreateBadge(x, y, w, h float32, tone BadgeTone, label string) (Badge, error) {
+	body, err := json.Marshal(struct {
+		X     float32   `json:"x"`
+		Y     float32   `json:"y"`
+		W     float32   `json:"w"`
+		H     float32   `json:"h"`
+		Tone  BadgeTone `json:"tone"`
+		Label string    `json:"label"`
+	}{x, y, w, h, tone, label})
+	if err != nil {
+		return 0, err
+	}
+	var resp widgetResponse
+	if err := json.Unmarshal(pdk.ParamBytes(natyvCreateBadgeHost(pdk.ResultBytes(body))), &resp); err != nil {
+		return 0, err
+	}
+	if resp.Error != "" {
+		return 0, errors.New(resp.Error)
+	}
+	return Badge(resp.WidgetID), nil
+}
+
+func (bd Badge) SetLabel(label string) error { return setText(uint32(bd), label) }
+func (bd Badge) Label() (string, error)      { return getText(uint32(bd)) }
+func (bd Badge) Destroy()                    { destroyWidget(uint32(bd)) }
 
 func setChecked(id uint32, checked bool) error {
 	body, err := json.Marshal(struct {

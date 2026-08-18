@@ -55,6 +55,9 @@ func natyvClayCreateRadioButtonHost(uint64) uint64
 //go:wasmimport extism:host/user natyv_clay_create_progressbar
 func natyvClayCreateProgressBarHost(uint64) uint64
 
+//go:wasmimport extism:host/user natyv_clay_create_badge
+func natyvClayCreateBadgeHost(uint64) uint64
+
 //go:wasmimport extism:host/user natyv_clay_create_divider
 func natyvClayCreateDividerHost(uint64) uint64
 
@@ -404,6 +407,23 @@ func CreateDivider(layout Layout) (natyv.Divider, error) {
 		return 0, err
 	}
 	return natyv.Divider(resp.WidgetID), nil
+}
+
+// CreateBadge -- W14, mirrors CreateCheckbox's shape minus checked.
+func CreateBadge(layout Layout, tone natyv.BadgeTone, label string) (natyv.Badge, error) {
+	body, err := json.Marshal(struct {
+		Layout Layout          `json:"layout"`
+		Tone   natyv.BadgeTone `json:"tone"`
+		Label  string          `json:"label"`
+	}{layout, tone, label})
+	if err != nil {
+		return 0, err
+	}
+	resp, err := decodeWidgetResponse(natyvClayCreateBadgeHost(pdk.ResultBytes(body)))
+	if err != nil {
+		return 0, err
+	}
+	return natyv.Badge(resp.WidgetID), nil
 }
 
 // decodeWidgetResponse factors out the shared response-decoding boilerplate
