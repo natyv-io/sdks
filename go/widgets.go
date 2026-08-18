@@ -21,6 +21,9 @@ func natyvCreateButtonHost(uint64) uint64
 //go:wasmimport extism:host/user natyv_create_textfield
 func natyvCreateTextFieldHost(uint64) uint64
 
+//go:wasmimport extism:host/user natyv_create_textarea
+func natyvCreateTextAreaHost(uint64) uint64
+
 //go:wasmimport extism:host/user natyv_create_label
 func natyvCreateLabelHost(uint64) uint64
 
@@ -63,6 +66,7 @@ func natyvGetValueHost(uint64) uint64
 // means what.
 type Button uint32
 type TextField uint32
+type TextArea uint32
 type Label uint32
 
 type widgetResponse struct {
@@ -138,6 +142,49 @@ func (t TextField) OnBlur(handler func(newFocusID uint32) error) { registerBlur(
 // OnKeyNav fires on Up/Down/Enter while this TextField is focused -- W6,
 // built for Combobox: move a highlighted option / select it.
 func (t TextField) OnKeyNav(handler func(key string) error) { registerKeyNav(uint32(t), handler) }
+
+// CreateTextArea -- W10, TextField's multi-line sibling. Same append/
+// backspace-at-the-end-only model as TextField (no arbitrary cursor
+// position); Enter inserts a literal newline instead of TextField's
+// "select the highlighted combobox option" meaning, handled entirely
+// host-side (see main.zig's SDLK_RETURN handling) -- nothing extra for
+// the guest to do, a newline just arrives as part of the same OnChange
+// text a keystroke would.
+func CreateTextArea(x, y, w, h float32, placeholder string) (TextArea, error) {
+	body, err := json.Marshal(struct {
+		X           float32 `json:"x"`
+		Y           float32 `json:"y"`
+		W           float32 `json:"w"`
+		H           float32 `json:"h"`
+		Placeholder string  `json:"placeholder"`
+	}{x, y, w, h, placeholder})
+	if err != nil {
+		return 0, err
+	}
+	var resp widgetResponse
+	if err := json.Unmarshal(pdk.ParamBytes(natyvCreateTextAreaHost(pdk.ResultBytes(body))), &resp); err != nil {
+		return 0, err
+	}
+	if resp.Error != "" {
+		return 0, errors.New(resp.Error)
+	}
+	return TextArea(resp.WidgetID), nil
+}
+
+func (t TextArea) Text() (string, error)     { return getText(uint32(t)) }
+func (t TextArea) SetText(text string) error { return setText(uint32(t), text) }
+func (t TextArea) Clear() error              { return t.SetText("") }
+func (t TextArea) Destroy()                  { destroyWidget(uint32(t)) }
+
+// OnChange fires on every mutation (typed character, backspace, or Enter
+// inserting a newline) -- same shape as TextField's. No OnKeyNav: a
+// TextArea never fires `.key_nav` (no highlight-navigation semantics in
+// v1 -- see the widget plan).
+func (t TextArea) OnChange(handler func(text string) error) { registerTextChange(uint32(t), handler) }
+
+// OnBlur fires once, when this widget loses focus -- same shape as
+// TextField's.
+func (t TextArea) OnBlur(handler func(newFocusID uint32) error) { registerBlur(uint32(t), handler) }
 
 func CreateLabel(x, y float32, text string) (Label, error) {
 	body, err := json.Marshal(struct {

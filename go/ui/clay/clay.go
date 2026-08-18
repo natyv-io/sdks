@@ -37,6 +37,9 @@ func natyvClayCreateButtonHost(uint64) uint64
 //go:wasmimport extism:host/user natyv_clay_create_textfield
 func natyvClayCreateTextFieldHost(uint64) uint64
 
+//go:wasmimport extism:host/user natyv_clay_create_textarea
+func natyvClayCreateTextAreaHost(uint64) uint64
+
 //go:wasmimport extism:host/user natyv_clay_create_label
 func natyvClayCreateLabelHost(uint64) uint64
 
@@ -262,6 +265,22 @@ func CreateTextField(layout Layout, placeholder string) (natyv.TextField, error)
 		return 0, err
 	}
 	return natyv.TextField(resp.WidgetID), nil
+}
+
+// CreateTextArea -- W10, mirrors CreateTextField's shape.
+func CreateTextArea(layout Layout, placeholder string) (natyv.TextArea, error) {
+	body, err := json.Marshal(struct {
+		Layout      Layout `json:"layout"`
+		Placeholder string `json:"placeholder"`
+	}{layout, placeholder})
+	if err != nil {
+		return 0, err
+	}
+	resp, err := decodeWidgetResponse(natyvClayCreateTextAreaHost(pdk.ResultBytes(body)))
+	if err != nil {
+		return 0, err
+	}
+	return natyv.TextArea(resp.WidgetID), nil
 }
 
 func CreateLabel(layout Layout, text string) (natyv.Label, error) {
