@@ -46,6 +46,9 @@ func natyvClayCreateLabelHost(uint64) uint64
 //go:wasmimport extism:host/user natyv_clay_create_checkbox
 func natyvClayCreateCheckboxHost(uint64) uint64
 
+//go:wasmimport extism:host/user natyv_clay_create_toggle
+func natyvClayCreateToggleHost(uint64) uint64
+
 //go:wasmimport extism:host/user natyv_clay_create_radio_button
 func natyvClayCreateRadioButtonHost(uint64) uint64
 
@@ -318,6 +321,23 @@ func CreateCheckbox(layout Layout, label string) (natyv.Checkbox, error) {
 		return 0, err
 	}
 	return natyv.Checkbox(resp.WidgetID), nil
+}
+
+// W12: same shape as CreateCheckbox -- natyv_set_checked/natyv_get_checked
+// work identically regardless of which create call produced the widget_id.
+func CreateToggle(layout Layout, label string) (natyv.Toggle, error) {
+	body, err := json.Marshal(struct {
+		Layout Layout `json:"layout"`
+		Label  string `json:"label"`
+	}{layout, label})
+	if err != nil {
+		return 0, err
+	}
+	resp, err := decodeWidgetResponse(natyvClayCreateToggleHost(pdk.ResultBytes(body)))
+	if err != nil {
+		return 0, err
+	}
+	return natyv.Toggle(resp.WidgetID), nil
 }
 
 // groupID -- see the base package's CreateRadioButton doc comment.

@@ -39,6 +39,9 @@ func natyvDestroyWidgetHost(uint64) uint64
 //go:wasmimport extism:host/user natyv_create_checkbox
 func natyvCreateCheckboxHost(uint64) uint64
 
+//go:wasmimport extism:host/user natyv_create_toggle
+func natyvCreateToggleHost(uint64) uint64
+
 //go:wasmimport extism:host/user natyv_create_radio_button
 func natyvCreateRadioButtonHost(uint64) uint64
 
@@ -222,6 +225,13 @@ type Checkbox uint32
 type RadioButton uint32
 type ProgressBar uint32
 
+// Toggle -- W12 widget breadth. Functionally identical to Checkbox (same
+// bool-state/click/focus model, see WidgetHost.zig's Toggle.zig doc
+// comment), just a different visual (pill track + thumb instead of a box +
+// checkmark) -- reuses natyv_set_checked/natyv_get_checked the same way
+// RadioButton does, no new host functions beyond its own create call.
+type Toggle uint32
+
 // Slider is natyv's first host-authoritative interactive widget -- see
 // WidgetHost.zig's file doc comment for the full explanation. Value() and
 // SetValue() work the same as ProgressBar's (a guest can still set a
@@ -257,6 +267,34 @@ func (cb Checkbox) Checked() (bool, error)        { return getChecked(uint32(cb)
 func (cb Checkbox) SetChecked(checked bool) error { return setChecked(uint32(cb), checked) }
 func (cb Checkbox) OnClick(handler func() error)  { registerClick(uint32(cb), handler) }
 func (cb Checkbox) Destroy()                      { destroyWidget(uint32(cb)) }
+
+func CreateToggle(x, y, w, h float32, label string) (Toggle, error) {
+	body, err := json.Marshal(struct {
+		X     float32 `json:"x"`
+		Y     float32 `json:"y"`
+		W     float32 `json:"w"`
+		H     float32 `json:"h"`
+		Label string  `json:"label"`
+	}{x, y, w, h, label})
+	if err != nil {
+		return 0, err
+	}
+	var resp widgetResponse
+	if err := json.Unmarshal(pdk.ParamBytes(natyvCreateToggleHost(pdk.ResultBytes(body))), &resp); err != nil {
+		return 0, err
+	}
+	if resp.Error != "" {
+		return 0, errors.New(resp.Error)
+	}
+	return Toggle(resp.WidgetID), nil
+}
+
+func (tg Toggle) SetLabel(label string) error   { return setText(uint32(tg), label) }
+func (tg Toggle) Label() (string, error)        { return getText(uint32(tg)) }
+func (tg Toggle) Checked() (bool, error)        { return getChecked(uint32(tg)) }
+func (tg Toggle) SetChecked(checked bool) error { return setChecked(uint32(tg), checked) }
+func (tg Toggle) OnClick(handler func() error)  { registerClick(uint32(tg), handler) }
+func (tg Toggle) Destroy()                      { destroyWidget(uint32(tg)) }
 
 // CreateRadioButton's groupID is an arbitrary tag the app picks -- every
 // radio button sharing the same groupID is mutually exclusive (selecting
