@@ -52,6 +52,9 @@ func natyvClayCreateRadioButtonHost(uint64) uint64
 //go:wasmimport extism:host/user natyv_clay_create_progressbar
 func natyvClayCreateProgressBarHost(uint64) uint64
 
+//go:wasmimport extism:host/user natyv_clay_create_divider
+func natyvClayCreateDividerHost(uint64) uint64
+
 //go:wasmimport extism:host/user natyv_clay_create_slider
 func natyvClayCreateSliderHost(uint64) uint64
 
@@ -366,6 +369,21 @@ func CreateSlider(layout Layout, value float32) (natyv.Slider, error) {
 		return 0, err
 	}
 	return natyv.Slider(resp.WidgetID), nil
+}
+
+// CreateDivider -- W11, mirrors CreateSlider's shape minus the value.
+func CreateDivider(layout Layout) (natyv.Divider, error) {
+	body, err := json.Marshal(struct {
+		Layout Layout `json:"layout"`
+	}{layout})
+	if err != nil {
+		return 0, err
+	}
+	resp, err := decodeWidgetResponse(natyvClayCreateDividerHost(pdk.ResultBytes(body)))
+	if err != nil {
+		return 0, err
+	}
+	return natyv.Divider(resp.WidgetID), nil
 }
 
 // decodeWidgetResponse factors out the shared response-decoding boilerplate

@@ -48,6 +48,9 @@ func natyvCreateProgressBarHost(uint64) uint64
 //go:wasmimport extism:host/user natyv_create_slider
 func natyvCreateSliderHost(uint64) uint64
 
+//go:wasmimport extism:host/user natyv_create_divider
+func natyvCreateDividerHost(uint64) uint64
+
 //go:wasmimport extism:host/user natyv_set_checked
 func natyvSetCheckedHost(uint64) uint64
 
@@ -338,6 +341,34 @@ func (s Slider) Value() (float32, error)                    { return getValue(ui
 func (s Slider) SetValue(value float32) error               { return setValue(uint32(s), value) }
 func (s Slider) OnChange(handler func(value float32) error) { registerChange(uint32(s), handler) }
 func (s Slider) Destroy()                                   { destroyWidget(uint32(s)) }
+
+// Divider is W11 -- a thin visual rule, purely decorative (no text, no
+// focus, no events). Horizontal vs. vertical is entirely a function of
+// the w/h given here (or the Layout sizing passed to the Clay variant),
+// not a separate field -- see Divider.zig's doc comment on the host side.
+type Divider uint32
+
+func CreateDivider(x, y, w, h float32) (Divider, error) {
+	body, err := json.Marshal(struct {
+		X float32 `json:"x"`
+		Y float32 `json:"y"`
+		W float32 `json:"w"`
+		H float32 `json:"h"`
+	}{x, y, w, h})
+	if err != nil {
+		return 0, err
+	}
+	var resp widgetResponse
+	if err := json.Unmarshal(pdk.ParamBytes(natyvCreateDividerHost(pdk.ResultBytes(body))), &resp); err != nil {
+		return 0, err
+	}
+	if resp.Error != "" {
+		return 0, errors.New(resp.Error)
+	}
+	return Divider(resp.WidgetID), nil
+}
+
+func (d Divider) Destroy() { destroyWidget(uint32(d)) }
 
 func setChecked(id uint32, checked bool) error {
 	body, err := json.Marshal(struct {
