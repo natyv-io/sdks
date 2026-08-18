@@ -76,6 +76,19 @@ func registerKeyNav(id uint32, handler func(key string) error) {
 	keyNavHandlers[id] = handler
 }
 
+// hoverHandlers is OnHover -- W15, fired when the host's hover-hold timer
+// crosses its threshold (true) and again the moment that widget stops
+// being hovered (false). Unlike OnClick, this reports a state transition,
+// not a discrete action -- a handler typically creates a tooltip's
+// Container+Label on true and destroys it on false, guarding the destroy
+// on "did I actually create one" since the host coalesces hover events
+// the same way it coalesces TextField's change events.
+var hoverHandlers = map[uint32]func(hovering bool) error{}
+
+func registerHover(id uint32, handler func(hovering bool) error) {
+	hoverHandlers[id] = handler
+}
+
 type dispatchEvent struct {
 	WidgetID  uint32 `json:"widget_id"`
 	EventType string `json:"event_type"`
@@ -104,6 +117,10 @@ type keyNavPayload struct {
 
 type blurPayload struct {
 	NewFocusID uint32 `json:"new_focus_id"`
+}
+
+type hoverPayload struct {
+	Hovering bool `json:"hovering"`
 }
 
 // natyv_dispatch lives entirely in the SDK -- app code never needs its own
@@ -176,6 +193,18 @@ func natyvDispatchExport() int32 {
 				return 1
 			}
 			if err := handler(payload.Key); err != nil {
+				pdk.SetErrorString(err.Error())
+				return 1
+			}
+		}
+	} else if event.EventType == "hover" {
+		if handler, ok := hoverHandlers[event.WidgetID]; ok {
+			var payload hoverPayload
+			if err := json.Unmarshal([]byte(event.Payload), &payload); err != nil {
+				pdk.SetErrorString(err.Error())
+				return 1
+			}
+			if err := handler(payload.Hovering); err != nil {
 				pdk.SetErrorString(err.Error())
 				return 1
 			}

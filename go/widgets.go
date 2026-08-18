@@ -107,7 +107,13 @@ func CreateButton(x, y, w, h float32, label string) (Button, error) {
 func (b Button) SetLabel(label string) error  { return setText(uint32(b), label) }
 func (b Button) Label() (string, error)       { return getText(uint32(b)) }
 func (b Button) OnClick(handler func() error) { registerClick(uint32(b), handler) }
-func (b Button) Destroy()                     { destroyWidget(uint32(b)) }
+
+// OnHover is W15's tooltip primitive -- fired true once the host's
+// hover-hold timer crosses its threshold over this Button, and false the
+// moment it stops being hovered. See registerHover's doc comment
+// (dispatch.go) for the usual create-on-true/destroy-on-false shape.
+func (b Button) OnHover(handler func(hovering bool) error) { registerHover(uint32(b), handler) }
+func (b Button) Destroy()                                  { destroyWidget(uint32(b)) }
 
 func CreateTextField(x, y, w, h float32, placeholder string) (TextField, error) {
 	body, err := json.Marshal(struct {
