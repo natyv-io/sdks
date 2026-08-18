@@ -57,6 +57,12 @@ func natyvCreateDividerHost(uint64) uint64
 //go:wasmimport extism:host/user natyv_create_badge
 func natyvCreateBadgeHost(uint64) uint64
 
+//go:wasmimport extism:host/user natyv_create_numeric_stepper
+func natyvCreateNumericStepperHost(uint64) uint64
+
+//go:wasmimport extism:host/user natyv_create_segmented_control
+func natyvCreateSegmentedControlHost(uint64) uint64
+
 //go:wasmimport extism:host/user natyv_set_checked
 func natyvSetCheckedHost(uint64) uint64
 
@@ -388,6 +394,92 @@ func (s Slider) Value() (float32, error)                    { return getValue(ui
 func (s Slider) SetValue(value float32) error               { return setValue(uint32(s), value) }
 func (s Slider) OnChange(handler func(value float32) error) { registerChange(uint32(s), handler) }
 func (s Slider) Destroy()                                   { destroyWidget(uint32(s)) }
+
+// NumericStepper is W17 -- Slider's integer-valued, click-zone-driven
+// sibling (minus/plus zones instead of a drag track), with real min/max/
+// step/wrap semantics instead of a normalized [0,1] value. Same
+// host-authoritative model as Slider: the host owns the value (a click or
+// a focused arrow-key press), the guest finds out via OnChange.
+type NumericStepper uint32
+
+func CreateNumericStepper(x, y, w, h float32, value, min, max, step int32, wrap bool) (NumericStepper, error) {
+	body, err := json.Marshal(struct {
+		X     float32 `json:"x"`
+		Y     float32 `json:"y"`
+		W     float32 `json:"w"`
+		H     float32 `json:"h"`
+		Value int32   `json:"value"`
+		Min   int32   `json:"min"`
+		Max   int32   `json:"max"`
+		Step  int32   `json:"step"`
+		Wrap  bool    `json:"wrap"`
+	}{x, y, w, h, value, min, max, step, wrap})
+	if err != nil {
+		return 0, err
+	}
+	var resp widgetResponse
+	if err := json.Unmarshal(pdk.ParamBytes(natyvCreateNumericStepperHost(pdk.ResultBytes(body))), &resp); err != nil {
+		return 0, err
+	}
+	if resp.Error != "" {
+		return 0, errors.New(resp.Error)
+	}
+	return NumericStepper(resp.WidgetID), nil
+}
+
+// Value/SetValue round-trip through the shared float32-valued
+// natyv_get_value/natyv_set_value wire (same as ProgressBar/Slider) --
+// fine for the small integer ranges a stepper deals in. OnChange reuses
+// the same `changeHandlers`/`changePayload` machinery every other
+// `.change`-emitting widget already shares, since the host's payload key
+// is the same `"value"` field (see main.zig's `notifyStepperValue`).
+func (n NumericStepper) Value() (int32, error) {
+	v, err := getValue(uint32(n))
+	return int32(v), err
+}
+func (n NumericStepper) SetValue(value int32) error { return setValue(uint32(n), float32(value)) }
+func (n NumericStepper) OnChange(handler func(value int32) error) {
+	registerChange(uint32(n), func(v float32) error { return handler(int32(v)) })
+}
+func (n NumericStepper) Destroy() { destroyWidget(uint32(n)) }
+
+// SegmentedControl is W17 -- a fixed row of mutually-exclusive labeled
+// segments, one focus stop (see SegmentedControl.zig's file doc comment
+// for why this is a real host widget kind rather than guest-composed
+// Buttons). Same host-authoritative model as Slider/NumericStepper.
+type SegmentedControl uint32
+
+func CreateSegmentedControl(x, y, w, h float32, segments []string, selectedIndex int) (SegmentedControl, error) {
+	body, err := json.Marshal(struct {
+		X             float32  `json:"x"`
+		Y             float32  `json:"y"`
+		W             float32  `json:"w"`
+		H             float32  `json:"h"`
+		Segments      []string `json:"segments"`
+		SelectedIndex int      `json:"selected_index"`
+	}{x, y, w, h, segments, selectedIndex})
+	if err != nil {
+		return 0, err
+	}
+	var resp widgetResponse
+	if err := json.Unmarshal(pdk.ParamBytes(natyvCreateSegmentedControlHost(pdk.ResultBytes(body))), &resp); err != nil {
+		return 0, err
+	}
+	if resp.Error != "" {
+		return 0, errors.New(resp.Error)
+	}
+	return SegmentedControl(resp.WidgetID), nil
+}
+
+func (sc SegmentedControl) SelectedIndex() (int, error) {
+	v, err := getValue(uint32(sc))
+	return int(v), err
+}
+func (sc SegmentedControl) Select(index int) error { return setValue(uint32(sc), float32(index)) }
+func (sc SegmentedControl) OnChange(handler func(index int) error) {
+	registerChange(uint32(sc), func(v float32) error { return handler(int(v)) })
+}
+func (sc SegmentedControl) Destroy() { destroyWidget(uint32(sc)) }
 
 // Divider is W11 -- a thin visual rule, purely decorative (no text, no
 // focus, no events). Horizontal vs. vertical is entirely a function of

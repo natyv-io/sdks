@@ -64,6 +64,12 @@ func natyvClayCreateDividerHost(uint64) uint64
 //go:wasmimport extism:host/user natyv_clay_create_slider
 func natyvClayCreateSliderHost(uint64) uint64
 
+//go:wasmimport extism:host/user natyv_clay_create_numeric_stepper
+func natyvClayCreateNumericStepperHost(uint64) uint64
+
+//go:wasmimport extism:host/user natyv_clay_create_segmented_control
+func natyvClayCreateSegmentedControlHost(uint64) uint64
+
 //go:wasmimport extism:host/user natyv_destroy_widget
 func natyvDestroyWidgetHost(uint64) uint64
 
@@ -392,6 +398,47 @@ func CreateSlider(layout Layout, value float32) (natyv.Slider, error) {
 		return 0, err
 	}
 	return natyv.Slider(resp.WidgetID), nil
+}
+
+// CreateNumericStepper -- W17, mirrors CreateSlider's shape with the
+// integer min/max/step/wrap fields NumericStepper needs. Handle returned
+// here is the same base `natyv` package type, same reasoning as CreateSlider's
+// own comment above.
+func CreateNumericStepper(layout Layout, value, min, max, step int32, wrap bool) (natyv.NumericStepper, error) {
+	body, err := json.Marshal(struct {
+		Layout Layout `json:"layout"`
+		Value  int32  `json:"value"`
+		Min    int32  `json:"min"`
+		Max    int32  `json:"max"`
+		Step   int32  `json:"step"`
+		Wrap   bool   `json:"wrap"`
+	}{layout, value, min, max, step, wrap})
+	if err != nil {
+		return 0, err
+	}
+	resp, err := decodeWidgetResponse(natyvClayCreateNumericStepperHost(pdk.ResultBytes(body)))
+	if err != nil {
+		return 0, err
+	}
+	return natyv.NumericStepper(resp.WidgetID), nil
+}
+
+// CreateSegmentedControl -- W17, mirrors CreateBadge's shape (a slice field
+// alongside `layout`).
+func CreateSegmentedControl(layout Layout, segments []string, selectedIndex int) (natyv.SegmentedControl, error) {
+	body, err := json.Marshal(struct {
+		Layout        Layout   `json:"layout"`
+		Segments      []string `json:"segments"`
+		SelectedIndex int      `json:"selected_index"`
+	}{layout, segments, selectedIndex})
+	if err != nil {
+		return 0, err
+	}
+	resp, err := decodeWidgetResponse(natyvClayCreateSegmentedControlHost(pdk.ResultBytes(body)))
+	if err != nil {
+		return 0, err
+	}
+	return natyv.SegmentedControl(resp.WidgetID), nil
 }
 
 // CreateDivider -- W11, mirrors CreateSlider's shape minus the value.
