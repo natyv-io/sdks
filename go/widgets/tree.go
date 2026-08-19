@@ -196,33 +196,44 @@ func rowLabel(n *TreeNode, selected bool) string {
 	return prefix + strings.Repeat(indentPerDepth, n.depth) + chevron + n.Label
 }
 
-// visibleRowCount is the pool size: how many rows the viewport can show at
-// once, plus 2 rows of overscan so a partially-visible row at the
-// viewport's own bottom edge is never left blank.
+// visibleRowCount is a fixed row pool's size: how many rows the viewport
+// can show at once, plus 2 rows of overscan so a partially-visible row at
+// the viewport's own bottom edge is never left blank. Shared by every
+// widget virtualized this way (Tree, Table).
 func visibleRowCount(viewportHeight, rowHeight float32) int {
 	return int(viewportHeight/rowHeight) + 2
 }
 
-// window computes the [startIdx, endIdx) slice of a total-length flattened
-// list that scrollOffsetY should populate the pool with -- pulled out of
-// render so onScroll can check whether a real scroll tick actually crossed
-// a row boundary before paying for a pool relabel pass.
-func (t *Tree) window(scrollOffsetY float32, total int) (startIdx, endIdx int) {
+// virtualizedWindow computes the [startIdx, endIdx) slice of a
+// total-length list that scrollOffsetY should populate a fixed-size pool
+// of poolSize rows with -- the core virtualization math every fixed-pool
+// widget in this SDK shares (Tree's own permanent row pool, and Table's
+// identical technique reusing this directly rather than re-deriving it --
+// see tree.go's own doc comment for why a permanent pool matters beyond
+// performance). Pulled out as its own function (not a `*Tree` method) so
+// `onScroll` can check whether a real scroll tick actually crossed a row
+// boundary before paying for a pool relabel pass, and so Table's own
+// `onScroll` can do the same without duplicating this math.
+func virtualizedWindow(scrollOffsetY, rowHeight float32, poolSize, total int) (startIdx, endIdx int) {
 	// scrollOffsetY is <= 0 (Clay's own convention -- 0 at the top, more
 	// negative the further down you've scrolled, see ClayLayout.zig's
 	// scrollContainerData).
-	startIdx = int(-scrollOffsetY / t.rowHeight)
+	startIdx = int(-scrollOffsetY / rowHeight)
 	if startIdx < 0 {
 		startIdx = 0
 	}
 	if startIdx > total {
 		startIdx = total
 	}
-	endIdx = startIdx + len(t.rowPool)
+	endIdx = startIdx + poolSize
 	if endIdx > total {
 		endIdx = total
 	}
 	return startIdx, endIdx
+}
+
+func (t *Tree) window(scrollOffsetY float32, total int) (startIdx, endIdx int) {
+	return virtualizedWindow(scrollOffsetY, t.rowHeight, len(t.rowPool), total)
 }
 
 // onScroll is RegisterScroll's own handler. A real mouse-wheel gesture
