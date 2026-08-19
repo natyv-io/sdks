@@ -42,4 +42,23 @@ func (b Button) OnClick(handler func() error) { internal.RegisterClick(uint32(b)
 func (b Button) OnHover(handler func(hovering bool) error) {
 	internal.RegisterHover(uint32(b), handler)
 }
+
+// OnBlur fires once, when this Button loses focus -- fired for any widget
+// kind host-side (see internal.RegisterBlur's own doc comment), exposed
+// here for Menu-shaped composition (a trigger/submenu-trigger Button
+// closing its own cascade on a real click-away). The handler receives
+// newFocusID (0 = none) -- which widget focus moved *to* -- since a widget
+// within your own composed panel gaining focus isn't the same as a real
+// click-away.
+func (b Button) OnBlur(handler func(newFocusID uint32) error) {
+	internal.RegisterBlur(uint32(b), handler)
+}
+
+// OnKeyNav fires on Up/Down/Enter while this Button is focused -- exposed
+// for Menu-shaped composition (moving a keyboard highlight across a
+// cascading menu's items).
+func (b Button) OnKeyNav(handler func(key string) error) {
+	internal.RegisterKeyNav(uint32(b), handler)
+}
+
 func (b Button) Destroy() { internal.DestroyWidget(uint32(b)) }

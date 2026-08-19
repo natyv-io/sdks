@@ -54,4 +54,14 @@ func (n NumericStepper) SetValue(value int32) error {
 func (n NumericStepper) OnChange(handler func(value int32) error) {
 	internal.RegisterChange(uint32(n), func(v float32) error { return handler(int32(v)) })
 }
+
+// OnBlur fires once, when this NumericStepper loses focus -- fired for any
+// widget kind host-side (see internal.RegisterBlur's own doc comment),
+// exposed here for composed panels (e.g. a Date & time picker) that need to
+// know when focus left one of their own controls to decide whether to
+// close.
+func (n NumericStepper) OnBlur(handler func(newFocusID uint32) error) {
+	internal.RegisterBlur(uint32(n), handler)
+}
+
 func (n NumericStepper) Destroy() { internal.DestroyWidget(uint32(n)) }

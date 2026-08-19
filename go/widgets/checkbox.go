@@ -33,4 +33,13 @@ func (cb Checkbox) Label() (string, error)        { return internal.GetText(uint
 func (cb Checkbox) Checked() (bool, error)        { return internal.GetChecked(uint32(cb)) }
 func (cb Checkbox) SetChecked(checked bool) error { return internal.SetChecked(uint32(cb), checked) }
 func (cb Checkbox) OnClick(handler func() error)  { internal.RegisterClick(uint32(cb), handler) }
-func (cb Checkbox) Destroy()                      { internal.DestroyWidget(uint32(cb)) }
+
+// OnBlur fires once, when this Checkbox loses focus -- fired for any widget
+// kind host-side (see internal.RegisterBlur's own doc comment), exposed
+// here for composed panels (e.g. a Popover) that need to know when focus
+// left one of their own controls to decide whether to close.
+func (cb Checkbox) OnBlur(handler func(newFocusID uint32) error) {
+	internal.RegisterBlur(uint32(cb), handler)
+}
+
+func (cb Checkbox) Destroy() { internal.DestroyWidget(uint32(cb)) }

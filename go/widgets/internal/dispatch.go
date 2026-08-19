@@ -84,6 +84,18 @@ func RegisterHover(id uint32, handler func(hovering bool) error) {
 	hoverHandlers[id] = handler
 }
 
+// scrollHandlers is OnScroll -- Tree view, fired to a scroll container's own
+// widget id whenever its live offset actually changes (host-side detection,
+// see WidgetHostFunctions.zig/ClayLayout.zig's own doc comments). Coalesced
+// like OnHover/OnChange: a container can move every frame while actively
+// scrolling, only the latest offset matters to a guest re-windowing a
+// virtualized list.
+var scrollHandlers = map[uint32]func(offsetX, offsetY float32) error{}
+
+func RegisterScroll(id uint32, handler func(offsetX, offsetY float32) error) {
+	scrollHandlers[id] = handler
+}
+
 type dispatchEvent struct {
 	WidgetID  uint32 `json:"widget_id"`
 	EventType string `json:"event_type"`
@@ -116,6 +128,11 @@ type blurPayload struct {
 
 type hoverPayload struct {
 	Hovering bool `json:"hovering"`
+}
+
+type scrollPayload struct {
+	ScrollOffsetX float32 `json:"scroll_offset_x"`
+	ScrollOffsetY float32 `json:"scroll_offset_y"`
 }
 
 // natyv_dispatch lives entirely in the SDK -- app code never needs its own
@@ -204,6 +221,18 @@ func natyvDispatchExport() int32 {
 				return 1
 			}
 			if err := handler(payload.Hovering); err != nil {
+				pdk.SetErrorString(err.Error())
+				return 1
+			}
+		}
+	} else if event.EventType == "scroll" {
+		if handler, ok := scrollHandlers[event.WidgetID]; ok {
+			var payload scrollPayload
+			if err := json.Unmarshal([]byte(event.Payload), &payload); err != nil {
+				pdk.SetErrorString(err.Error())
+				return 1
+			}
+			if err := handler(payload.ScrollOffsetX, payload.ScrollOffsetY); err != nil {
 				pdk.SetErrorString(err.Error())
 				return 1
 			}
