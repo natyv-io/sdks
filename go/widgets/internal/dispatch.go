@@ -1,4 +1,4 @@
-package natyv
+package internal
 
 import (
 	"encoding/json"
@@ -10,12 +10,14 @@ import (
 // contract calls for: the host only ever knows "dispatch this event," never
 // which widget maps to what app behavior -- OnClick is the guest-side
 // concern that makes that lookup work. Package-level state persists across
-// calls into the same plugin instance (the same invariant the bookstore
-// example relied on before this existed), so registrations made during
+// calls into the same plugin instance, so registrations made during
 // natyv_init are still there when natyv_dispatch fires later.
 var clickHandlers = map[uint32]func() error{}
 
-func registerClick(id uint32, handler func() error) {
+// RegisterClick is exported (unlike this file's original, single-package
+// home) since every widget kind now lives in its own file in the sibling
+// `widgets` package, one import boundary away from this one.
+func RegisterClick(id uint32, handler func() error) {
 	clickHandlers[id] = handler
 }
 
@@ -24,7 +26,7 @@ func registerClick(id uint32, handler func() error) {
 // signature carries the new value rather than being a bare notification.
 var changeHandlers = map[uint32]func(value float32) error{}
 
-func registerChange(id uint32, handler func(value float32) error) {
+func RegisterChange(id uint32, handler func(value float32) error) {
 	changeHandlers[id] = handler
 }
 
@@ -32,25 +34,18 @@ func registerChange(id uint32, handler func(value float32) error) {
 // fired to a modal's own widget id on Escape or a backdrop click. The host
 // never force-closes a modal; the guest decides here whether to actually
 // destroy its subtree, same discretion every other destroy/recreate widget
-// already has. Exported (unlike clickHandlers/registerClick, which never
-// needed to cross a package boundary) since Container -- the type a modal
-// root actually is -- lives in the sibling `clay` package, not here.
+// already has.
 var dismissHandlers = map[uint32]func() error{}
 
-// RegisterDismiss is exported for clay.Container.OnDismiss to call into --
-// see dismissHandlers' doc comment for why this one needs to be exported
-// where registerClick/registerChange don't.
 func RegisterDismiss(id uint32, handler func() error) {
 	dismissHandlers[id] = handler
 }
 
-// textChangeHandlers is the OnChange counterpart for TextField -- W6, fired
-// after every keystroke (append or backspace). TextField lives in this same
-// package (widgets.go), so this stays unexported like registerClick/
-// registerChange, unlike RegisterDismiss above.
+// textChangeHandlers is the OnChange counterpart for TextField/TextArea --
+// W6, fired after every keystroke (append or backspace).
 var textChangeHandlers = map[uint32]func(text string) error{}
 
-func registerTextChange(id uint32, handler func(text string) error) {
+func RegisterTextChange(id uint32, handler func(text string) error) {
 	textChangeHandlers[id] = handler
 }
 
@@ -63,7 +58,7 @@ func registerTextChange(id uint32, handler func(text string) error) {
 // part of my own widget tree" apart from a real click-away).
 var blurHandlers = map[uint32]func(newFocusID uint32) error{}
 
-func registerBlur(id uint32, handler func(newFocusID uint32) error) {
+func RegisterBlur(id uint32, handler func(newFocusID uint32) error) {
 	blurHandlers[id] = handler
 }
 
@@ -72,7 +67,7 @@ func registerBlur(id uint32, handler func(newFocusID uint32) error) {
 // highlighted option. Never fired for any other widget kind.
 var keyNavHandlers = map[uint32]func(key string) error{}
 
-func registerKeyNav(id uint32, handler func(key string) error) {
+func RegisterKeyNav(id uint32, handler func(key string) error) {
 	keyNavHandlers[id] = handler
 }
 
@@ -85,7 +80,7 @@ func registerKeyNav(id uint32, handler func(key string) error) {
 // the same way it coalesces TextField's change events.
 var hoverHandlers = map[uint32]func(hovering bool) error{}
 
-func registerHover(id uint32, handler func(hovering bool) error) {
+func RegisterHover(id uint32, handler func(hovering bool) error) {
 	hoverHandlers[id] = handler
 }
 
@@ -125,7 +120,11 @@ type hoverPayload struct {
 
 // natyv_dispatch lives entirely in the SDK -- app code never needs its own
 // //go:wasmexport natyv_dispatch or to parse an event payload itself, only
-// to call OnClick when creating a widget.
+// to call OnClick when creating a widget. Living in `internal` doesn't
+// change that -- a `//go:wasmexport` symbol is a link-level export, not a
+// Go-level API surface, so TinyGo still emits it into the final binary as
+// long as this package is transitively imported by main (which the
+// `widgets` package guarantees just by importing this one).
 //
 //go:wasmexport natyv_dispatch
 func natyvDispatchExport() int32 {

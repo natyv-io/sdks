@@ -1,15 +1,11 @@
-package clay
+package widgets
 
-import (
-	"errors"
-
-	"natyv/sdk"
-)
+import "errors"
 
 // Breadcrumbs is a navigation trail composed entirely from existing
 // primitives -- a LeftToRight row alternating clickable crumb Buttons with
 // separator Labels, needing no new host mechanism at all (same "guest
-// composes it from primitives" precedent Dialog already established for a
+// composes it from primitives" precedent Dialog already establishes for a
 // floating widget, applied here to a normal-flow one). The final crumb (the
 // current page) renders as a plain, non-clickable Label instead of a
 // Button, matching how a real breadcrumb trail never lets you "navigate" to
@@ -19,9 +15,9 @@ type Breadcrumbs struct {
 	// Every child widget id this composed -- separator labels, the final
 	// Label, and every crumb Button -- destroyed before root itself on
 	// Destroy(). Same explicit-list precedent Dialog.close() already
-	// established (Container.Destroy has no cascading delete).
+	// establishes (Container.Destroy has no cascading delete).
 	extraIDs []uint32
-	buttons  []natyv.Button
+	buttons  []Button
 }
 
 // approxTextWidth estimates a glyph-rendered text's pixel width from its
@@ -71,7 +67,7 @@ func approxLabelWidth(text string) float32 {
 // wouldn't be one. crumbs must have at least one entry.
 func CreateBreadcrumbs(layout Layout, crumbs []string, separator string) (Breadcrumbs, error) {
 	if len(crumbs) == 0 {
-		return Breadcrumbs{}, errors.New("clay: CreateBreadcrumbs needs at least one crumb")
+		return Breadcrumbs{}, errors.New("widgets: CreateBreadcrumbs needs at least one crumb")
 	}
 
 	layout.Direction = LeftToRight
