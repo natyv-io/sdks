@@ -37,6 +37,15 @@ func natyvGetTextHost(uint64) uint64
 //go:wasmimport extism:host/user natyv_destroy_widget
 func natyvDestroyWidgetHost(uint64) uint64
 
+//go:wasmimport extism:host/user natyv_set_visible
+func natyvSetVisibleHost(uint64) uint64
+
+//go:wasmimport extism:host/user natyv_get_scroll_position
+func natyvGetScrollPositionHost(uint64) uint64
+
+//go:wasmimport extism:host/user natyv_scroll_into_view
+func natyvScrollIntoViewHost(uint64) uint64
+
 // WidgetResponse is the shared {"widget_id":N}|{"error":...} shape every
 // natyv_clay_create_* host function replies with.
 type WidgetResponse struct {
@@ -176,6 +185,89 @@ func GetText(id uint32) (string, error) {
 		return "", errors.New(resp.Error)
 	}
 	return resp.Text, nil
+}
+
+// SetVisible shows/hides id's whole subtree without destroying it -- see
+// host-side WidgetHostFunctions.zig's setVisibleHostFn doc comment. Built
+// for Accordion (accordion.go composes this with an existing Button/
+// Container rather than a new widget kind) but generic to any widget id.
+func SetVisible(id uint32, visible bool) error {
+	body, err := json.Marshal(struct {
+		WidgetID uint32 `json:"widget_id"`
+		Visible  bool   `json:"visible"`
+	}{id, visible})
+	if err != nil {
+		return err
+	}
+	var resp struct {
+		Error string `json:"error,omitempty"`
+	}
+	if err := json.Unmarshal(pdk.ParamBytes(natyvSetVisibleHost(pdk.ResultBytes(body))), &resp); err != nil {
+		return err
+	}
+	if resp.Error != "" {
+		return errors.New(resp.Error)
+	}
+	return nil
+}
+
+// ScrollPosition mirrors WidgetHostFunctions.zig's getScrollPositionHostFn
+// response -- Clay's live scroll offset/dimensions for a scroll container,
+// as of the most recent real layout pass (see host-side
+// WidgetHost.Slot.scroll_data's own doc comment for the staleness note).
+type ScrollPosition struct {
+	ScrollOffsetX float32 `json:"scroll_offset_x"`
+	ScrollOffsetY float32 `json:"scroll_offset_y"`
+	ContainerW    float32 `json:"container_w"`
+	ContainerH    float32 `json:"container_h"`
+	ContentW      float32 `json:"content_w"`
+	ContentH      float32 `json:"content_h"`
+}
+
+// GetScrollPosition errors if id doesn't name a scroll container (Layout's
+// ScrollVertical/ScrollHorizontal weren't set at create time).
+func GetScrollPosition(id uint32) (ScrollPosition, error) {
+	body, err := json.Marshal(struct {
+		WidgetID uint32 `json:"widget_id"`
+	}{id})
+	if err != nil {
+		return ScrollPosition{}, err
+	}
+	var resp struct {
+		ScrollPosition
+		Error string `json:"error,omitempty"`
+	}
+	if err := json.Unmarshal(pdk.ParamBytes(natyvGetScrollPositionHost(pdk.ResultBytes(body))), &resp); err != nil {
+		return ScrollPosition{}, err
+	}
+	if resp.Error != "" {
+		return ScrollPosition{}, errors.New(resp.Error)
+	}
+	return resp.ScrollPosition, nil
+}
+
+// ScrollIntoView scrolls id's nearest scrollable ancestor just enough to
+// bring id back within its viewport -- a harmless no-op if id has no
+// scrollable ancestor or is already fully visible. Built for Accordion
+// (accordion.go calls this after expanding a section), but generic to any
+// widget id -- see WidgetHostFunctions.zig's scrollIntoViewHostFn.
+func ScrollIntoView(id uint32) error {
+	body, err := json.Marshal(struct {
+		WidgetID uint32 `json:"widget_id"`
+	}{id})
+	if err != nil {
+		return err
+	}
+	var resp struct {
+		Error string `json:"error,omitempty"`
+	}
+	if err := json.Unmarshal(pdk.ParamBytes(natyvScrollIntoViewHost(pdk.ResultBytes(body))), &resp); err != nil {
+		return err
+	}
+	if resp.Error != "" {
+		return errors.New(resp.Error)
+	}
+	return nil
 }
 
 func DestroyWidget(id uint32) {
