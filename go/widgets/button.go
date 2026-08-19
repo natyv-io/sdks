@@ -61,4 +61,10 @@ func (b Button) OnKeyNav(handler func(key string) error) {
 	internal.RegisterKeyNav(uint32(b), handler)
 }
 
+// SetVisible shows/hides this Button without destroying it -- see
+// internal.SetVisible's own doc comment. Built for Tree view's fixed row
+// pool (tree.go hides whichever pool slots the current window doesn't
+// need, rather than destroying/recreating rows on every render).
+func (b Button) SetVisible(visible bool) error { return internal.SetVisible(uint32(b), visible) }
+
 func (b Button) Destroy() { internal.DestroyWidget(uint32(b)) }

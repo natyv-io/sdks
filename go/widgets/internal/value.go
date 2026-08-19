@@ -40,6 +40,9 @@ func natyvDestroyWidgetHost(uint64) uint64
 //go:wasmimport extism:host/user natyv_set_visible
 func natyvSetVisibleHost(uint64) uint64
 
+//go:wasmimport extism:host/user natyv_set_size
+func natyvSetSizeHost(uint64) uint64
+
 //go:wasmimport extism:host/user natyv_get_scroll_position
 func natyvGetScrollPositionHost(uint64) uint64
 
@@ -203,6 +206,32 @@ func SetVisible(id uint32, visible bool) error {
 		Error string `json:"error,omitempty"`
 	}
 	if err := json.Unmarshal(pdk.ParamBytes(natyvSetVisibleHost(pdk.ResultBytes(body))), &resp); err != nil {
+		return err
+	}
+	if resp.Error != "" {
+		return errors.New(resp.Error)
+	}
+	return nil
+}
+
+// SetHeight resizes id in place to a Fixed height (min=max=height,
+// regardless of whatever sizing type it was created with) -- see host-side
+// WidgetHostFunctions.zig's setSizeHostFn doc comment. Built for Tree
+// view's virtualized spacer Containers (tree.go composes this instead of
+// destroying and recreating them on every scroll tick) but generic to any
+// widget id. Width is left untouched -- no current caller needs both axes.
+func SetHeight(id uint32, height float32) error {
+	body, err := json.Marshal(struct {
+		WidgetID uint32  `json:"widget_id"`
+		Height   float32 `json:"height"`
+	}{id, height})
+	if err != nil {
+		return err
+	}
+	var resp struct {
+		Error string `json:"error,omitempty"`
+	}
+	if err := json.Unmarshal(pdk.ParamBytes(natyvSetSizeHost(pdk.ResultBytes(body))), &resp); err != nil {
 		return err
 	}
 	if resp.Error != "" {

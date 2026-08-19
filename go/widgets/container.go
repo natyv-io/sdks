@@ -54,4 +54,9 @@ func CreateContainer(layout Layout, background bool, durationMs uint32) (Contain
 // ever the target of a `.dismiss` event.
 func (c Container) OnDismiss(handler func() error) { internal.RegisterDismiss(uint32(c), handler) }
 
+// SetHeight resizes this Container in place to a Fixed height, regardless
+// of whatever Sizing it was created with -- see internal.SetHeight's own
+// doc comment. Width is untouched.
+func (c Container) SetHeight(height float32) error { return internal.SetHeight(uint32(c), height) }
+
 func (c Container) Destroy() { internal.DestroyWidget(uint32(c)) }
