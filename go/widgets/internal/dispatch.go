@@ -30,6 +30,18 @@ func RegisterChange(id uint32, handler func(value float32) error) {
 	changeHandlers[id] = handler
 }
 
+// rangeChangeHandlers is RangeSlider's own OnChange counterpart --
+// W27, a different payload shape (`{"min":f,"max":f}`) under the same
+// `.change` event type Slider/NumericStepper/SegmentedControl/Tabs share, so
+// it needs its own handler table and signature rather than reusing
+// changeHandlers. A widget id is only ever one kind, so natyvDispatchExport
+// checking this map first (falling back to changeHandlers) is unambiguous.
+var rangeChangeHandlers = map[uint32]func(min, max float32) error{}
+
+func RegisterRangeChange(id uint32, handler func(min, max float32) error) {
+	rangeChangeHandlers[id] = handler
+}
+
 // dismissHandlers is the OnDismiss counterpart to clickHandlers -- W5,
 // fired to a modal's own widget id on Escape or a backdrop click. The host
 // never force-closes a modal; the guest decides here whether to actually
@@ -127,6 +139,11 @@ type changePayload struct {
 	Value float32 `json:"value"`
 }
 
+type rangeChangePayload struct {
+	Min float32 `json:"min"`
+	Max float32 `json:"max"`
+}
+
 type textChangedPayload struct {
 	Text string `json:"text"`
 }
@@ -183,6 +200,16 @@ func natyvDispatchExport() int32 {
 				return 1
 			}
 			if err := handler(payload.Value); err != nil {
+				pdk.SetErrorString(err.Error())
+				return 1
+			}
+		} else if handler, ok := rangeChangeHandlers[event.WidgetID]; ok {
+			var payload rangeChangePayload
+			if err := json.Unmarshal([]byte(event.Payload), &payload); err != nil {
+				pdk.SetErrorString(err.Error())
+				return 1
+			}
+			if err := handler(payload.Min, payload.Max); err != nil {
 				pdk.SetErrorString(err.Error())
 				return 1
 			}

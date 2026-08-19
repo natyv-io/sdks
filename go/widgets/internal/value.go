@@ -28,6 +28,12 @@ func natyvSetValueHost(uint64) uint64
 //go:wasmimport extism:host/user natyv_get_value
 func natyvGetValueHost(uint64) uint64
 
+//go:wasmimport extism:host/user natyv_set_range
+func natyvSetRangeHost(uint64) uint64
+
+//go:wasmimport extism:host/user natyv_get_range
+func natyvGetRangeHost(uint64) uint64
+
 //go:wasmimport extism:host/user natyv_set_text
 func natyvSetTextHost(uint64) uint64
 
@@ -154,6 +160,56 @@ func GetValue(id uint32) (float32, error) {
 		return 0, errors.New(resp.Error)
 	}
 	return resp.Value, nil
+}
+
+// SetRange sets both ends of a RangeSlider's span at once -- see host-side
+// WidgetHostFunctions.zig's setRangeHostFn doc comment for why this is one
+// call, not two separate SetValue-style calls (setting each end
+// independently would clamp against whatever the *other* one still is at
+// that moment, which can reject a legitimate new pair depending on call
+// order).
+func SetRange(id uint32, min, max float32) error {
+	body, err := json.Marshal(struct {
+		WidgetID uint32  `json:"widget_id"`
+		Min      float32 `json:"min"`
+		Max      float32 `json:"max"`
+	}{id, min, max})
+	if err != nil {
+		return err
+	}
+	var resp struct {
+		Error string `json:"error,omitempty"`
+	}
+	if err := json.Unmarshal(pdk.ParamBytes(natyvSetRangeHost(pdk.ResultBytes(body))), &resp); err != nil {
+		return err
+	}
+	if resp.Error != "" {
+		return errors.New(resp.Error)
+	}
+	return nil
+}
+
+// GetRange reads a RangeSlider's current {min, max} -- the RangeSlider
+// counterpart to GetValue.
+func GetRange(id uint32) (min, max float32, err error) {
+	body, marshalErr := json.Marshal(struct {
+		WidgetID uint32 `json:"widget_id"`
+	}{id})
+	if marshalErr != nil {
+		return 0, 0, marshalErr
+	}
+	var resp struct {
+		Min   float32 `json:"min"`
+		Max   float32 `json:"max"`
+		Error string  `json:"error,omitempty"`
+	}
+	if err := json.Unmarshal(pdk.ParamBytes(natyvGetRangeHost(pdk.ResultBytes(body))), &resp); err != nil {
+		return 0, 0, err
+	}
+	if resp.Error != "" {
+		return 0, 0, errors.New(resp.Error)
+	}
+	return resp.Min, resp.Max, nil
 }
 
 func SetText(id uint32, text string) error {
