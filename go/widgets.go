@@ -481,6 +481,37 @@ func (sc SegmentedControl) OnChange(handler func(index int) error) {
 }
 func (sc SegmentedControl) Destroy() { destroyWidget(uint32(sc)) }
 
+// Tabs is W19 -- a header row of mutually-exclusive labeled tabs paired
+// with real Clay-managed panel children, exactly one shown at a time (see
+// host-side Tabs.zig's file doc comment). Unlike every other type in this
+// file, there's no plain natyv_create_tabs -- Tabs is inherently a Clay
+// parent/child + visibility construct, so it only exists via
+// clay.CreateTabs (see sdk/go/ui/clay/tabs.go). The type and its value/
+// change/destroy methods still live here, not there, since they reuse this
+// package's own setValue/getValue/registerChange/destroyWidget helpers the
+// same way SegmentedControl's do above -- natyv_set_value/natyv_get_value/
+// natyv_destroy_widget/the .change dispatch all work identically
+// regardless of which package's Create* call produced the widget_id, same
+// reasoning clay.go's own doc comments already give for Button/Slider/etc.
+type Tabs uint32
+
+func (t Tabs) SelectedIndex() (int, error) {
+	v, err := getValue(uint32(t))
+	return int(v), err
+}
+func (t Tabs) Select(index int) error { return setValue(uint32(t), float32(index)) }
+func (t Tabs) OnChange(handler func(index int) error) {
+	registerChange(uint32(t), func(v float32) error { return handler(int(v)) })
+}
+
+// Destroy destroys only the Tabs widget itself, not its panels -- natyv has
+// no cascading delete (see WidgetHost.zig's destroySubtreeLocked doc
+// comment for the one narrow exception, which doesn't apply here). Destroy
+// every panel Container clay.CreateTabPanel returned before or after
+// calling this, same explicit-per-child pattern Dialog.close already
+// establishes for its own multi-widget composition.
+func (t Tabs) Destroy() { destroyWidget(uint32(t)) }
+
 // Divider is W11 -- a thin visual rule, purely decorative (no text, no
 // focus, no events). Horizontal vs. vertical is entirely a function of
 // the w/h given here (or the Layout sizing passed to the Clay variant),
