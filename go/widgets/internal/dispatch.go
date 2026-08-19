@@ -96,6 +96,19 @@ func RegisterScroll(id uint32, handler func(offsetX, offsetY float32) error) {
 	scrollHandlers[id] = handler
 }
 
+// fileSelectedHandlers is OnFileSelected -- W23, fired to the trigger
+// widget id that originally called natyv_show_open_file_dialog/
+// natyv_show_save_file_dialog, once the real SDL callback fires. Discrete
+// like OnClick/OnDismiss, not coalesced (see EventQueue.EventType's own
+// doc comment for why). paths is empty for a cancelled dialog or a real
+// host-side error -- the wire contract doesn't distinguish the two, since
+// a guest can't act differently either way.
+var fileSelectedHandlers = map[uint32]func(paths []string) error{}
+
+func RegisterFileSelected(id uint32, handler func(paths []string) error) {
+	fileSelectedHandlers[id] = handler
+}
+
 type dispatchEvent struct {
 	WidgetID  uint32 `json:"widget_id"`
 	EventType string `json:"event_type"`
@@ -133,6 +146,10 @@ type hoverPayload struct {
 type scrollPayload struct {
 	ScrollOffsetX float32 `json:"scroll_offset_x"`
 	ScrollOffsetY float32 `json:"scroll_offset_y"`
+}
+
+type fileSelectedPayload struct {
+	Paths []string `json:"paths"`
 }
 
 // natyv_dispatch lives entirely in the SDK -- app code never needs its own
@@ -233,6 +250,18 @@ func natyvDispatchExport() int32 {
 				return 1
 			}
 			if err := handler(payload.ScrollOffsetX, payload.ScrollOffsetY); err != nil {
+				pdk.SetErrorString(err.Error())
+				return 1
+			}
+		}
+	} else if event.EventType == "file_selected" {
+		if handler, ok := fileSelectedHandlers[event.WidgetID]; ok {
+			var payload fileSelectedPayload
+			if err := json.Unmarshal([]byte(event.Payload), &payload); err != nil {
+				pdk.SetErrorString(err.Error())
+				return 1
+			}
+			if err := handler(payload.Paths); err != nil {
 				pdk.SetErrorString(err.Error())
 				return 1
 			}

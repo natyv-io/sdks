@@ -49,6 +49,12 @@ func natyvGetScrollPositionHost(uint64) uint64
 //go:wasmimport extism:host/user natyv_scroll_into_view
 func natyvScrollIntoViewHost(uint64) uint64
 
+//go:wasmimport extism:host/user natyv_show_open_file_dialog
+func natyvShowOpenFileDialogHost(uint64) uint64
+
+//go:wasmimport extism:host/user natyv_show_save_file_dialog
+func natyvShowSaveFileDialogHost(uint64) uint64
+
 // WidgetResponse is the shared {"widget_id":N}|{"error":...} shape every
 // natyv_clay_create_* host function replies with.
 type WidgetResponse struct {
@@ -291,6 +297,54 @@ func ScrollIntoView(id uint32) error {
 		Error string `json:"error,omitempty"`
 	}
 	if err := json.Unmarshal(pdk.ParamBytes(natyvScrollIntoViewHost(pdk.ResultBytes(body))), &resp); err != nil {
+		return err
+	}
+	if resp.Error != "" {
+		return errors.New(resp.Error)
+	}
+	return nil
+}
+
+// ShowOpenFileDialog queues an "open file" native OS dialog request for the
+// host's main thread to actually show next frame -- see
+// WidgetHostFunctions.zig's showOpenFileDialogHostFn doc comment. The real
+// result (chosen path(s), or none) arrives later as a real event through
+// RegisterFileSelected(id, ...), not a return value here -- register that
+// before calling this.
+func ShowOpenFileDialog(id uint32, allowMany bool) error {
+	body, err := json.Marshal(struct {
+		WidgetID  uint32 `json:"widget_id"`
+		AllowMany bool   `json:"allow_many"`
+	}{id, allowMany})
+	if err != nil {
+		return err
+	}
+	var resp struct {
+		Error string `json:"error,omitempty"`
+	}
+	if err := json.Unmarshal(pdk.ParamBytes(natyvShowOpenFileDialogHost(pdk.ResultBytes(body))), &resp); err != nil {
+		return err
+	}
+	if resp.Error != "" {
+		return errors.New(resp.Error)
+	}
+	return nil
+}
+
+// ShowSaveFileDialog is ShowOpenFileDialog's save-dialog counterpart -- no
+// allowMany (SDL_ShowSaveFileDialog has no such parameter), same
+// RegisterFileSelected result delivery.
+func ShowSaveFileDialog(id uint32) error {
+	body, err := json.Marshal(struct {
+		WidgetID uint32 `json:"widget_id"`
+	}{id})
+	if err != nil {
+		return err
+	}
+	var resp struct {
+		Error string `json:"error,omitempty"`
+	}
+	if err := json.Unmarshal(pdk.ParamBytes(natyvShowSaveFileDialogHost(pdk.ResultBytes(body))), &resp); err != nil {
 		return err
 	}
 	if resp.Error != "" {
