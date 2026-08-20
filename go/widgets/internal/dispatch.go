@@ -121,6 +121,18 @@ func RegisterFileSelected(id uint32, handler func(paths []string) error) {
 	fileSelectedHandlers[id] = handler
 }
 
+// windowCloseRequestedHandlers is OnCloseRequested -- Multi-window Stage 5,
+// fired to a window's own root widget id when the user clicks its real OS
+// close button. The host never destroys anything on its own; the guest
+// decides here whether to actually call Window.Close(), same discretion
+// dismissHandlers already gives a modal. No payload -- same empty-string
+// shape natyv_dispatch's own ".dismiss" case already has.
+var windowCloseRequestedHandlers = map[uint32]func() error{}
+
+func RegisterWindowCloseRequested(id uint32, handler func() error) {
+	windowCloseRequestedHandlers[id] = handler
+}
+
 type dispatchEvent struct {
 	WidgetID  uint32 `json:"widget_id"`
 	EventType string `json:"event_type"`
@@ -289,6 +301,13 @@ func natyvDispatchExport() int32 {
 				return 1
 			}
 			if err := handler(payload.Paths); err != nil {
+				pdk.SetErrorString(err.Error())
+				return 1
+			}
+		}
+	} else if event.EventType == "window_close_requested" {
+		if handler, ok := windowCloseRequestedHandlers[event.WidgetID]; ok {
+			if err := handler(); err != nil {
 				pdk.SetErrorString(err.Error())
 				return 1
 			}
