@@ -49,6 +49,9 @@ func natyvSetVisibleHost(uint64) uint64
 //go:wasmimport extism:host/user natyv_set_size
 func natyvSetSizeHost(uint64) uint64
 
+//go:wasmimport extism:host/user natyv_set_style
+func natyvSetStyleHost(uint64) uint64
+
 //go:wasmimport extism:host/user natyv_get_scroll_position
 func natyvGetScrollPositionHost(uint64) uint64
 
@@ -294,6 +297,57 @@ func SetHeight(id uint32, height float32) error {
 		Error string `json:"error,omitempty"`
 	}
 	if err := json.Unmarshal(pdk.ParamBytes(natyvSetSizeHost(pdk.ResultBytes(body))), &resp); err != nil {
+		return err
+	}
+	if resp.Error != "" {
+		return errors.New(resp.Error)
+	}
+	return nil
+}
+
+// ColorValue/PaddingValue are plain wire-shaped mirrors of
+// WidgetHostFunctions.zig's SetStyleRequest -- 0..1 floats for color,
+// matching the stylesheet resolver's own convention (src/styling/
+// Resolver.zig), not the 0-255 range some other Go color types use.
+// Deliberately local to this package rather than reusing the sibling
+// `widgets` package's own nicer `Color`/`Padding` types: `internal` can't
+// import `widgets` (that package already imports `internal` -- Go doesn't
+// allow the cycle), so `widgets.ApplyStyle` converts down to these at the
+// call site instead.
+type ColorValue struct {
+	R float32 `json:"r"`
+	G float32 `json:"g"`
+	B float32 `json:"b"`
+	A float32 `json:"a"`
+}
+
+type PaddingValue struct {
+	Left   uint16 `json:"left"`
+	Right  uint16 `json:"right"`
+	Top    uint16 `json:"top"`
+	Bottom uint16 `json:"bottom"`
+}
+
+// SetStyle applies already-resolved style values to an existing widget --
+// bg/padding are nil when the caller (widgets.ApplyStyle) didn't resolve
+// that property from any of the applied tokens, omitted from the wire JSON
+// entirely via `omitempty` rather than sent as an explicit zero/null, so
+// WidgetHostFunctions.zig's SetStyleRequest sees "leave this property
+// unchanged" (its own `?T = null` default), not "set it to zero." See
+// setStyleHostFn's doc comment for why this never takes a style-token name.
+func SetStyle(id uint32, bg *ColorValue, padding *PaddingValue) error {
+	body, err := json.Marshal(struct {
+		WidgetID        uint32        `json:"widget_id"`
+		BackgroundColor *ColorValue   `json:"background_color,omitempty"`
+		Padding         *PaddingValue `json:"padding,omitempty"`
+	}{id, bg, padding})
+	if err != nil {
+		return err
+	}
+	var resp struct {
+		Error string `json:"error,omitempty"`
+	}
+	if err := json.Unmarshal(pdk.ParamBytes(natyvSetStyleHost(pdk.ResultBytes(body))), &resp); err != nil {
 		return err
 	}
 	if resp.Error != "" {
