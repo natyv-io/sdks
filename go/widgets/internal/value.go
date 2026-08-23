@@ -328,19 +328,35 @@ type PaddingValue struct {
 	Bottom uint16 `json:"bottom"`
 }
 
+// BorderValue mirrors WidgetHostFunctions.zig's BorderRequest -- a plain
+// JSON object (width + a nested color object), not the raw 4-float array
+// shape corner radius uses (border isn't itself a per-corner value).
+type BorderValue struct {
+	Width float32    `json:"width"`
+	Color ColorValue `json:"color"`
+}
+
 // SetStyle applies already-resolved style values to an existing widget --
-// bg/padding are nil when the caller (widgets.ApplyStyle) didn't resolve
+// every field is nil when the caller (widgets.ApplyStyle) didn't resolve
 // that property from any of the applied tokens, omitted from the wire JSON
 // entirely via `omitempty` rather than sent as an explicit zero/null, so
 // WidgetHostFunctions.zig's SetStyleRequest sees "leave this property
 // unchanged" (its own `?T = null` default), not "set it to zero." See
 // setStyleHostFn's doc comment for why this never takes a style-token name.
-func SetStyle(id uint32, bg *ColorValue, padding *PaddingValue) error {
+// `cornerRadius` marshals as a plain 4-element JSON array (TL, TR, BR, BL,
+// matching the stylesheet's real CSS-clockwise order) -- Go's own
+// encoding/json marshals a fixed-size array natively as a JSON array,
+// which is exactly the shape SetStyleRequest's `corner_radius: ?[4]f32`
+// expects, so no wrapper object is needed here the way BorderValue needs
+// one.
+func SetStyle(id uint32, bg *ColorValue, padding *PaddingValue, cornerRadius *[4]float32, border *BorderValue) error {
 	body, err := json.Marshal(struct {
 		WidgetID        uint32        `json:"widget_id"`
 		BackgroundColor *ColorValue   `json:"background_color,omitempty"`
 		Padding         *PaddingValue `json:"padding,omitempty"`
-	}{id, bg, padding})
+		CornerRadius    *[4]float32   `json:"corner_radius,omitempty"`
+		Border          *BorderValue  `json:"border,omitempty"`
+	}{id, bg, padding, cornerRadius, border})
 	if err != nil {
 		return err
 	}

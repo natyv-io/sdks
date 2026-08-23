@@ -16,6 +16,25 @@ type Color struct {
 	R, G, B, A float32
 }
 
+// CornerRadius is one style token's resolved per-corner radius -- named
+// fields (not a bare [4]float32) for the same readability reason Padding
+// uses Left/Right/Top/Bottom instead of a raw array. Order is TL/TR/BR/BL,
+// matching the stylesheet's real CSS-clockwise convention
+// (src/styling/Resolver.zig).
+type CornerRadius struct {
+	TopLeft, TopRight, BottomRight, BottomLeft float32
+}
+
+// Border is one style token's resolved border -- width + color are always
+// both present together (Resolver.zig requires both when a `border` block
+// is used at all), so Color is a plain value here, not a pointer like
+// ResolvedStyle's own BackgroundColor (whose absence is meaningful on its
+// own).
+type Border struct {
+	Width float32
+	Color Color
+}
+
 // ResolvedStyle is one style token's resolved property values, exactly the
 // shape `natyv prepare`'s codegen emits into the generated `StyleTokens`
 // map (see Codegen.zig's own doc comment) -- pointer fields distinguish "a
@@ -23,15 +42,17 @@ type Color struct {
 // resolved" (non-nil), needed for ApplyStyle's later-wins merge across
 // multiple token names.
 //
-// Only BackgroundColor/Padding are consumed by ApplyStyle today.
-// CornerRadius/Border/Gradient/Texture parse and resolve correctly
-// end-to-end (src/styling/Resolver.zig) but have no rendering path to
-// apply to yet -- that's Stage 3's SDF-shader migration. Kept out of this
-// struct until Stage 3 defines their real Go-side shape, rather than
+// BackgroundColor/Padding/CornerRadius/Border are consumed by ApplyStyle.
+// Gradient/Texture parse and resolve correctly end-to-end
+// (src/styling/Resolver.zig) but have no rendering path to apply to yet --
+// Gradient is Stage 5b, Texture is still blocked on asset staging. Kept
+// out of this struct until each has a real Go-side shape, rather than
 // guessing at it now.
 type ResolvedStyle struct {
 	BackgroundColor *Color
 	Padding         *Padding
+	CornerRadius    *CornerRadius
+	Border          *Border
 }
 
 // mergeStyles applies later-wins precedence across multiple resolved
@@ -46,6 +67,12 @@ func mergeStyles(styles []ResolvedStyle) ResolvedStyle {
 		}
 		if s.Padding != nil {
 			out.Padding = s.Padding
+		}
+		if s.CornerRadius != nil {
+			out.CornerRadius = s.CornerRadius
+		}
+		if s.Border != nil {
+			out.Border = s.Border
 		}
 	}
 	return out
@@ -87,5 +114,17 @@ func ApplyStyle(widgetID uint32, tokens map[string]ResolvedStyle, tokenNames ...
 	if merged.Padding != nil {
 		padding = &internal.PaddingValue{Left: merged.Padding.Left, Right: merged.Padding.Right, Top: merged.Padding.Top, Bottom: merged.Padding.Bottom}
 	}
-	return internal.SetStyle(widgetID, bg, padding)
+	var cornerRadius *[4]float32
+	if merged.CornerRadius != nil {
+		cr := merged.CornerRadius
+		cornerRadius = &[4]float32{cr.TopLeft, cr.TopRight, cr.BottomRight, cr.BottomLeft}
+	}
+	var border *internal.BorderValue
+	if merged.Border != nil {
+		border = &internal.BorderValue{
+			Width: merged.Border.Width,
+			Color: internal.ColorValue{R: merged.Border.Color.R, G: merged.Border.Color.G, B: merged.Border.Color.B, A: merged.Border.Color.A},
+		}
+	}
+	return internal.SetStyle(widgetID, bg, padding, cornerRadius, border)
 }
