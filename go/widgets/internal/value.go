@@ -336,6 +336,18 @@ type BorderValue struct {
 	Color ColorValue `json:"color"`
 }
 
+// GradientValue mirrors WidgetHostFunctions.zig's GradientRequest --
+// StartPos/EndPos are already-resolved 0..1 shape-space positions (the
+// stylesheet's named anchor, e.g. `topLeft`, is resolved to this plain
+// coordinate at `natyv prepare` time, see Codegen.zig's `anchorUV`), so
+// this wire type has no anchor concept at all.
+type GradientValue struct {
+	StartPos   [2]float32 `json:"start_pos"`
+	StartColor ColorValue `json:"start_color"`
+	EndPos     [2]float32 `json:"end_pos"`
+	EndColor   ColorValue `json:"end_color"`
+}
+
 // SetStyle applies already-resolved style values to an existing widget --
 // every field is nil when the caller (widgets.ApplyStyle) didn't resolve
 // that property from any of the applied tokens, omitted from the wire JSON
@@ -349,14 +361,15 @@ type BorderValue struct {
 // which is exactly the shape SetStyleRequest's `corner_radius: ?[4]f32`
 // expects, so no wrapper object is needed here the way BorderValue needs
 // one.
-func SetStyle(id uint32, bg *ColorValue, padding *PaddingValue, cornerRadius *[4]float32, border *BorderValue) error {
+func SetStyle(id uint32, bg *ColorValue, padding *PaddingValue, cornerRadius *[4]float32, border *BorderValue, gradient *GradientValue) error {
 	body, err := json.Marshal(struct {
-		WidgetID        uint32        `json:"widget_id"`
-		BackgroundColor *ColorValue   `json:"background_color,omitempty"`
-		Padding         *PaddingValue `json:"padding,omitempty"`
-		CornerRadius    *[4]float32   `json:"corner_radius,omitempty"`
-		Border          *BorderValue  `json:"border,omitempty"`
-	}{id, bg, padding, cornerRadius, border})
+		WidgetID        uint32         `json:"widget_id"`
+		BackgroundColor *ColorValue    `json:"background_color,omitempty"`
+		Padding         *PaddingValue  `json:"padding,omitempty"`
+		CornerRadius    *[4]float32    `json:"corner_radius,omitempty"`
+		Border          *BorderValue   `json:"border,omitempty"`
+		Gradient        *GradientValue `json:"gradient,omitempty"`
+	}{id, bg, padding, cornerRadius, border, gradient})
 	if err != nil {
 		return err
 	}

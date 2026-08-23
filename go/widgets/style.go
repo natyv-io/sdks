@@ -35,6 +35,19 @@ type Border struct {
 	Color Color
 }
 
+// Gradient is one style token's resolved linear gradient. StartPos/EndPos
+// are already-resolved 0..1 shape-space positions -- `natyv prepare`'s
+// codegen bakes the stylesheet's named anchor (`topLeft`, etc.) into this
+// plain coordinate at prepare time (Codegen.zig's own `anchorUV`), the
+// same way a hex color is baked into floats, so nothing guest-facing here
+// needs to know the anchor vocabulary exists.
+type Gradient struct {
+	StartPos   [2]float32
+	StartColor Color
+	EndPos     [2]float32
+	EndColor   Color
+}
+
 // ResolvedStyle is one style token's resolved property values, exactly the
 // shape `natyv prepare`'s codegen emits into the generated `StyleTokens`
 // map (see Codegen.zig's own doc comment) -- pointer fields distinguish "a
@@ -42,17 +55,16 @@ type Border struct {
 // resolved" (non-nil), needed for ApplyStyle's later-wins merge across
 // multiple token names.
 //
-// BackgroundColor/Padding/CornerRadius/Border are consumed by ApplyStyle.
-// Gradient/Texture parse and resolve correctly end-to-end
-// (src/styling/Resolver.zig) but have no rendering path to apply to yet --
-// Gradient is Stage 5b, Texture is still blocked on asset staging. Kept
-// out of this struct until each has a real Go-side shape, rather than
-// guessing at it now.
+// BackgroundColor/Padding/CornerRadius/Border/Gradient are consumed by
+// ApplyStyle. Texture parses and resolves correctly end-to-end
+// (src/styling/Resolver.zig) but is still blocked on asset staging -- kept
+// out of this struct until that lands, rather than guessing at it now.
 type ResolvedStyle struct {
 	BackgroundColor *Color
 	Padding         *Padding
 	CornerRadius    *CornerRadius
 	Border          *Border
+	Gradient        *Gradient
 }
 
 // mergeStyles applies later-wins precedence across multiple resolved
@@ -73,6 +85,9 @@ func mergeStyles(styles []ResolvedStyle) ResolvedStyle {
 		}
 		if s.Border != nil {
 			out.Border = s.Border
+		}
+		if s.Gradient != nil {
+			out.Gradient = s.Gradient
 		}
 	}
 	return out
@@ -126,5 +141,15 @@ func ApplyStyle(widgetID uint32, tokens map[string]ResolvedStyle, tokenNames ...
 			Color: internal.ColorValue{R: merged.Border.Color.R, G: merged.Border.Color.G, B: merged.Border.Color.B, A: merged.Border.Color.A},
 		}
 	}
-	return internal.SetStyle(widgetID, bg, padding, cornerRadius, border)
+	var gradient *internal.GradientValue
+	if merged.Gradient != nil {
+		g := merged.Gradient
+		gradient = &internal.GradientValue{
+			StartPos:   g.StartPos,
+			StartColor: internal.ColorValue{R: g.StartColor.R, G: g.StartColor.G, B: g.StartColor.B, A: g.StartColor.A},
+			EndPos:     g.EndPos,
+			EndColor:   internal.ColorValue{R: g.EndColor.R, G: g.EndColor.G, B: g.EndColor.B, A: g.EndColor.A},
+		}
+	}
+	return internal.SetStyle(widgetID, bg, padding, cornerRadius, border, gradient)
 }
