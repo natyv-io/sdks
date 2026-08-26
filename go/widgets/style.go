@@ -55,17 +55,27 @@ type Gradient struct {
 // resolved" (non-nil), needed for ApplyStyle's later-wins merge across
 // multiple token names.
 //
-// BackgroundColor/Padding/CornerRadius/Border/Gradient are consumed by
-// ApplyStyle. Texture parses and resolves correctly end-to-end
-// (src/styling/Resolver.zig) but is still blocked on asset staging -- kept
-// out of this struct until that lands, rather than guessing at it now.
+// TextureID is a real asset id, not a path -- `natyv prepare`'s codegen
+// resolves the stylesheet's `texture: "logo.png"` string into this at
+// generate time (see Codegen.zig's own doc comment), an index into the
+// per-app `TextureAssets.data` embedded-bytes array the host reads from.
+// Guest code never constructs one of these by hand; it only ever flows
+// through from a generated `StyleTokens` entry.
 type ResolvedStyle struct {
 	BackgroundColor *Color
 	Padding         *Padding
 	CornerRadius    *CornerRadius
 	Border          *Border
 	Gradient        *Gradient
+	TextureID       *uint32
 }
+
+// TextureIDPtr exists only so `natyv prepare`'s generated code can populate
+// ResolvedStyle.TextureID -- Go doesn't allow taking the address of a bare
+// integer literal (`&5` is a compile error), unlike CornerRadius/Border/
+// Gradient's composite-literal fields, which can be addressed directly.
+// Not expected to be called from hand-written guest code.
+func TextureIDPtr(id uint32) *uint32 { return &id }
 
 // mergeStyles applies later-wins precedence across multiple resolved
 // tokens, field by field -- matches the token model's own "plain
@@ -88,6 +98,9 @@ func mergeStyles(styles []ResolvedStyle) ResolvedStyle {
 		}
 		if s.Gradient != nil {
 			out.Gradient = s.Gradient
+		}
+		if s.TextureID != nil {
+			out.TextureID = s.TextureID
 		}
 	}
 	return out
@@ -151,5 +164,5 @@ func ApplyStyle(widgetID uint32, tokens map[string]ResolvedStyle, tokenNames ...
 			EndColor:   internal.ColorValue{R: g.EndColor.R, G: g.EndColor.G, B: g.EndColor.B, A: g.EndColor.A},
 		}
 	}
-	return internal.SetStyle(widgetID, bg, padding, cornerRadius, border, gradient)
+	return internal.SetStyle(widgetID, bg, padding, cornerRadius, border, gradient, merged.TextureID)
 }

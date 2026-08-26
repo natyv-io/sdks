@@ -361,7 +361,11 @@ type GradientValue struct {
 // which is exactly the shape SetStyleRequest's `corner_radius: ?[4]f32`
 // expects, so no wrapper object is needed here the way BorderValue needs
 // one.
-func SetStyle(id uint32, bg *ColorValue, padding *PaddingValue, cornerRadius *[4]float32, border *BorderValue, gradient *GradientValue) error {
+// `texture` is already a resolved numeric asset id (widgets.ApplyStyle's
+// own job to resolve a stylesheet's texture path string into this, at
+// natyv-prepare-codegen time) -- see WidgetHostFunctions.zig's
+// SetStyleRequest.texture doc comment for why the host never sees a path.
+func SetStyle(id uint32, bg *ColorValue, padding *PaddingValue, cornerRadius *[4]float32, border *BorderValue, gradient *GradientValue, texture *uint32) error {
 	body, err := json.Marshal(struct {
 		WidgetID        uint32         `json:"widget_id"`
 		BackgroundColor *ColorValue    `json:"background_color,omitempty"`
@@ -369,7 +373,8 @@ func SetStyle(id uint32, bg *ColorValue, padding *PaddingValue, cornerRadius *[4
 		CornerRadius    *[4]float32    `json:"corner_radius,omitempty"`
 		Border          *BorderValue   `json:"border,omitempty"`
 		Gradient        *GradientValue `json:"gradient,omitempty"`
-	}{id, bg, padding, cornerRadius, border, gradient})
+		Texture         *uint32        `json:"texture,omitempty"`
+	}{id, bg, padding, cornerRadius, border, gradient, texture})
 	if err != nil {
 		return err
 	}
