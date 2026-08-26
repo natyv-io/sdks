@@ -124,16 +124,43 @@ func mergeStyles(styles []ResolvedStyle) ResolvedStyle {
 // this package for a first, prove-it-works pass. Worth revisiting once
 // this has a real caller beyond the fixture demo.
 func ApplyStyle(widgetID uint32, tokens map[string]ResolvedStyle, tokenNames ...string) error {
+	merged, err := resolveTokenNames(tokens, tokenNames)
+	if err != nil {
+		return err
+	}
+	return applyMergedStyle(widgetID, merged)
+}
+
+// ApplyStyleWithTexture merges tokenNames exactly like ApplyStyle, then
+// overrides the merged result's TextureID with textureID directly --
+// `<Image src="...">` sugar's own real mechanism (see ntx/Codegen.zig's
+// emitApplyStyleWithTexture): src's own resolved asset id always wins over
+// whatever texture (if any) the named tokens themselves carry, per Quinn's
+// own explicit call, while every other merged field from tokenNames still
+// applies normally. tokenNames may be empty -- a bare `<Image src="..."/>`
+// with no styles={} at all still needs its texture applied.
+func ApplyStyleWithTexture(widgetID uint32, tokens map[string]ResolvedStyle, textureID uint32, tokenNames ...string) error {
+	merged, err := resolveTokenNames(tokens, tokenNames)
+	if err != nil {
+		return err
+	}
+	merged.TextureID = &textureID
+	return applyMergedStyle(widgetID, merged)
+}
+
+func resolveTokenNames(tokens map[string]ResolvedStyle, tokenNames []string) (ResolvedStyle, error) {
 	resolved := make([]ResolvedStyle, 0, len(tokenNames))
 	for _, name := range tokenNames {
 		style, ok := tokens[name]
 		if !ok {
-			return fmt.Errorf("natyv: unknown style token %q", name)
+			return ResolvedStyle{}, fmt.Errorf("natyv: unknown style token %q", name)
 		}
 		resolved = append(resolved, style)
 	}
-	merged := mergeStyles(resolved)
+	return mergeStyles(resolved), nil
+}
 
+func applyMergedStyle(widgetID uint32, merged ResolvedStyle) error {
 	var bg *internal.ColorValue
 	if merged.BackgroundColor != nil {
 		bg = &internal.ColorValue{R: merged.BackgroundColor.R, G: merged.BackgroundColor.G, B: merged.BackgroundColor.B, A: merged.BackgroundColor.A}
