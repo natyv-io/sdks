@@ -81,16 +81,13 @@ func (c *Card) SetTitle(title string) error {
 	return c.title.SetText(title)
 }
 
-// Destroy destroys every widget CreateCard created -- no cascading delete
-// exists in natyv (see Dialog's own doc comment for the same reasoning).
-// Does not destroy whatever the caller parented under ContentID() --
-// that's the caller's own content, the caller's own responsibility, same
-// as Popover's own Close() only ever destroying what build itself created.
+// Destroy destroys the whole card, including whatever the caller parented
+// under ContentID() -- title, divider, and content are all real Clay
+// children of panel, so destroying panel alone cascades through all of
+// them (and, transitively, through content's own children too). Don't use
+// any widget id you parented under ContentID() after calling this, same
+// "don't touch what you destroyed" discipline every other destroyed handle
+// in this SDK already requires.
 func (c *Card) Destroy() {
-	if c.title != 0 {
-		c.title.Destroy()
-		c.divider.Destroy()
-	}
-	c.content.Destroy()
 	c.panel.Destroy()
 }

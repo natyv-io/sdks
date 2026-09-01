@@ -75,10 +75,8 @@ func (t Tabs) OnChange(handler func(index int) error) {
 	internal.RegisterChange(uint32(t), func(v float32) error { return handler(int(v)) })
 }
 
-// Destroy destroys only the Tabs widget itself, not its panels -- natyv has
-// no cascading delete (see WidgetHost.zig's destroySubtreeLocked doc
-// comment for the one narrow exception, which doesn't apply here). Destroy
-// every panel Container CreateTabPanel returned before or after calling
-// this, same explicit-per-child pattern Dialog.close already establishes
-// for its own multi-widget composition.
+// Destroy destroys this Tabs widget and every panel CreateTabPanel
+// returned for it -- each panel is a real Clay child of the Tabs widget
+// (see CreateTabPanel's own doc comment), so a single destroy call
+// cascades through all of them.
 func (t Tabs) Destroy() { internal.DestroyWidget(uint32(t)) }

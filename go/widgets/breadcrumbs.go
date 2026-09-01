@@ -11,13 +11,8 @@ import "errors"
 // Button, matching how a real breadcrumb trail never lets you "navigate" to
 // where you already are.
 type Breadcrumbs struct {
-	root uint32
-	// Every child widget id this composed -- separator labels, the final
-	// Label, and every crumb Button -- destroyed before root itself on
-	// Destroy(). Same explicit-list precedent Dialog.close() already
-	// establishes (Container.Destroy has no cascading delete).
-	extraIDs []uint32
-	buttons  []Button
+	root    uint32
+	buttons []Button
 }
 
 // approxTextWidth estimates a glyph-rendered text's pixel width from its
@@ -82,14 +77,12 @@ func CreateBreadcrumbs(layout Layout, crumbs []string, separator string) (Breadc
 	for i, crumb := range crumbs {
 		last := i == len(crumbs)-1
 		if last {
-			lbl, err := CreateLabel(Layout{
+			if _, err := CreateLabel(Layout{
 				ParentID: &rootID,
 				Sizing:   Sizing{Width: Fixed(approxLabelWidth(crumb)), Height: Fixed(20)},
-			}, crumb)
-			if err != nil {
+			}, crumb); err != nil {
 				return Breadcrumbs{}, err
 			}
-			b.extraIDs = append(b.extraIDs, uint32(lbl))
 			break
 		}
 
@@ -101,16 +94,13 @@ func CreateBreadcrumbs(layout Layout, crumbs []string, separator string) (Breadc
 			return Breadcrumbs{}, err
 		}
 		b.buttons = append(b.buttons, btn)
-		b.extraIDs = append(b.extraIDs, uint32(btn))
 
-		sepLabel, err := CreateLabel(Layout{
+		if _, err := CreateLabel(Layout{
 			ParentID: &rootID,
 			Sizing:   Sizing{Width: Fixed(approxLabelWidth(separator)), Height: Fixed(20)},
-		}, separator)
-		if err != nil {
+		}, separator); err != nil {
 			return Breadcrumbs{}, err
 		}
-		b.extraIDs = append(b.extraIDs, uint32(sepLabel))
 	}
 
 	return b, nil
@@ -132,11 +122,9 @@ func (b Breadcrumbs) OnCrumbClick(handler func(index int) error) {
 	}
 }
 
-// Destroy destroys every widget this trail composed, explicitly -- see the
-// type doc comment for why this can't be a single Destroy() call on root.
+// Destroy destroys the whole trail -- every crumb Button and separator
+// Label is a real Clay child of root, so destroying root alone cascades to
+// all of them.
 func (b Breadcrumbs) Destroy() {
-	for _, id := range b.extraIDs {
-		Container(id).Destroy()
-	}
 	Container(b.root).Destroy()
 }

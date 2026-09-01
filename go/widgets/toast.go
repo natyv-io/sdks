@@ -51,9 +51,8 @@ func (t *ToastStack) Show(width, height float32, durationMs uint32, message stri
 	return err
 }
 
-// Destroy destroys the stack container itself. Any still-live (not yet
-// expired) toasts inside it are left to the host's own destroy-widget
-// handling, same as every other "no cascading delete" case in this SDK --
-// callers that need a clean teardown should let toasts expire naturally
-// before calling this.
+// Destroy destroys the stack container -- any still-live (not yet expired)
+// toasts, and their own message Labels, are real Clay descendants of it,
+// so this cascades through them too, a clean teardown regardless of
+// whether anything inside is still showing.
 func (t *ToastStack) Destroy() { t.container.Destroy() }

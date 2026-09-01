@@ -314,24 +314,10 @@ func (t *Table) sortBy(col int) error {
 	return t.render(t.lastScrollOffsetY)
 }
 
-// Destroy destroys every widget this Table ever created -- natyv has no
-// cascading delete, same explicit-per-child pattern every other
-// multi-widget composition in this SDK already uses. Safe to call at any
-// point during a failed CreateTable (Destroy on a zero-value handle, or
-// ranging over a nil slice, is a no-op).
+// Destroy destroys the wrapper -- header, headerBtns, viewport, every row,
+// every cell, and both spacers are all real Clay descendants of it, so
+// this alone cascades through the entire table. Safe to call at any point
+// during a failed CreateTable (Destroy on a zero-value handle is a no-op).
 func (t *Table) Destroy() {
-	for k, row := range t.rowPool {
-		for _, cell := range t.cellPool[k] {
-			cell.Destroy()
-		}
-		row.Destroy()
-	}
-	t.topSpacer.Destroy()
-	t.bottomSpacer.Destroy()
-	t.viewport.Destroy()
-	for _, btn := range t.headerBtns {
-		btn.Destroy()
-	}
-	t.header.Destroy()
 	t.wrapper.Destroy()
 }

@@ -6,21 +6,13 @@ package widgets
 // all: everything it composes from (CreateContainer's Modal/background,
 // CreateLabel, CreateButton, Container.OnDismiss) already exists.
 //
-// Container.Destroy has no cascading delete (deliberate, unchanged -- see
-// WidgetHost.zig's destroyExpiredWidgets doc comment for the one narrow,
-// host-driven exception to that rule, which doesn't apply here). Dialog
-// tracks every widget it created so closing one explicitly destroys all of
-// them, the same `closeModal`-style explicit list every other multi-widget
-// panel in this SDK already uses.
+// Every widget Dialog creates (title/message labels, the button row, every
+// button) is a real Clay descendant of root, so destroying root alone
+// cascades through all of them -- see close()'s own doc comment.
 type Dialog struct {
-	root uint32
-	// Every child widget id created for this dialog (title/message labels,
-	// the button row, every button) -- destroyed before root itself on
-	// close. Order doesn't matter; natyv has no parent-must-outlive-
-	// children constraint on destroy order.
-	extraIDs []uint32
-	buttons  []Button
-	labels   []string // labels[i] is buttons[i]'s label
+	root    uint32
+	buttons []Button
+	labels  []string // labels[i] is buttons[i]'s label
 }
 
 // CreateDialog builds a centered, backdrop-blocking Modal (see Layout.Modal)
@@ -47,27 +39,23 @@ func CreateDialog(title, message string, buttonLabels []string) (Dialog, error) 
 	d := Dialog{root: rootID}
 
 	if title != "" {
-		titleLabel, err := CreateLabel(Layout{
+		if _, err := CreateLabel(Layout{
 			ParentID: &rootID,
 			// Fixed, not Fit -- natyv has no real font-driven Fit-height
 			// measurement for text widgets yet (see SizingAxis.Fit's own
 			// doc comment: a Label sized Fit collapses text height toward 0).
 			Sizing: Sizing{Width: Grow(), Height: Fixed(20)},
-		}, title)
-		if err != nil {
+		}, title); err != nil {
 			return Dialog{}, err
 		}
-		d.extraIDs = append(d.extraIDs, uint32(titleLabel))
 	}
 
-	msgLabel, err := CreateLabel(Layout{
+	if _, err := CreateLabel(Layout{
 		ParentID: &rootID,
 		Sizing:   Sizing{Width: Grow(), Height: Fixed(20)},
-	}, message)
-	if err != nil {
+	}, message); err != nil {
 		return Dialog{}, err
 	}
-	d.extraIDs = append(d.extraIDs, uint32(msgLabel))
 
 	row, err := CreateContainer(Layout{
 		ParentID:       &rootID,
@@ -80,7 +68,6 @@ func CreateDialog(title, message string, buttonLabels []string) (Dialog, error) 
 		return Dialog{}, err
 	}
 	rowID := uint32(row)
-	d.extraIDs = append(d.extraIDs, rowID)
 
 	for _, label := range buttonLabels {
 		btn, err := CreateButton(Layout{
@@ -92,7 +79,6 @@ func CreateDialog(title, message string, buttonLabels []string) (Dialog, error) 
 		}
 		d.buttons = append(d.buttons, btn)
 		d.labels = append(d.labels, label)
-		d.extraIDs = append(d.extraIDs, uint32(btn))
 	}
 
 	root.OnDismiss(func() error {
@@ -103,16 +89,12 @@ func CreateDialog(title, message string, buttonLabels []string) (Dialog, error) 
 	return d, nil
 }
 
-// close destroys every widget this dialog created, explicitly -- see the
-// type doc comment for why this can't be a single Destroy() call on root.
-// Best-effort per widget (same as every other Destroy() in this SDK) --
-// harmless if called more than once (e.g. Escape racing a button click
-// that already closed it), since a destroy against an already-gone
-// widget_id just fails silently rather than crashing.
+// close destroys the whole dialog -- root alone cascades through every
+// label/row/button it created, see the type doc comment. Harmless if
+// called more than once (e.g. Escape racing a button click that already
+// closed it), since a destroy against an already-gone widget_id just
+// fails silently rather than crashing.
 func (d Dialog) close() {
-	for _, id := range d.extraIDs {
-		Container(id).Destroy()
-	}
 	Container(d.root).Destroy()
 }
 

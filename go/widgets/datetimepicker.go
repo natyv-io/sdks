@@ -108,16 +108,14 @@ func (p *DateTimePicker) onBlur(newFocusID uint32) error {
 
 // destroyGrid tears down just the day-grid portion (rows, leading blank
 // spacers, day buttons) -- not the panel, header, weekday labels, or time
-// row, which never need touching once the panel's first opened. Safe to
-// call with nothing built yet. Shared by renderGrid (destroy before
-// repopulating for a new month) and close (as part of a full teardown).
+// row, which never need touching once the panel's first opened. dayButtons
+// and spacers are real Clay children of their own gridRow, so destroying
+// each row alone cascades through both -- only gridRows itself needs an
+// explicit loop, since the rows aren't descendants of one another. Safe to
+// call with nothing built yet. Used by renderGrid (destroy before
+// repopulating for a new month) -- close() no longer needs it, since
+// destroying panel already cascades through the grid too.
 func (p *DateTimePicker) destroyGrid() {
-	for _, b := range p.dayButtons {
-		b.Destroy()
-	}
-	for _, s := range p.spacers {
-		s.Destroy()
-	}
 	for _, r := range p.gridRows {
 		r.Destroy()
 	}
@@ -128,25 +126,21 @@ func (p *DateTimePicker) destroyGrid() {
 }
 
 // close tears down the entire open panel -- the grid, every weekday header,
-// the nav/time controls, and the panel itself. Safe to call when nothing is
-// open. No cascading delete exists in natyv.
+// the nav/time controls, and the panel itself. headerRow/weekdayRow/
+// timeRow/gridRows are all real Clay children of panel (and everything
+// each of them holds -- prevBtn/nextBtn/headerLabel/weekdayLabels/
+// hourStepper/minuteStepper/dayButtons/spacers -- is in turn a descendant
+// of one of those), so destroying panel alone cascades through the entire
+// tree. Safe to call when nothing is open.
 func (p *DateTimePicker) close() error {
 	if p.panel == 0 {
 		return nil
 	}
-	p.destroyGrid()
-	for _, l := range p.weekdayLabels {
-		l.Destroy()
-	}
+	p.dayButtons = nil
+	p.dayButtonDays = nil
+	p.spacers = nil
+	p.gridRows = nil
 	p.weekdayLabels = nil
-	p.prevBtn.Destroy()
-	p.nextBtn.Destroy()
-	p.headerLabel.Destroy()
-	p.headerRow.Destroy()
-	p.weekdayRow.Destroy()
-	p.timeRow.Destroy()
-	p.hourStepper.Destroy()
-	p.minuteStepper.Destroy()
 	p.panel.Destroy()
 	p.panel = 0
 	return nil
@@ -407,8 +401,9 @@ func (p *DateTimePicker) selectDay(day int) error {
 	return nil
 }
 
-// Destroy closes the picker (if open) and destroys the trigger itself.
+// Destroy destroys the trigger -- panel (if open) and everything under it
+// are real Clay descendants of it, so this alone cascades through
+// everything, no need to call close() first.
 func (p *DateTimePicker) Destroy() {
-	_ = p.close()
 	p.trigger.Destroy()
 }

@@ -59,11 +59,9 @@ func (t *Tooltip) onHover(hovering bool) error {
 		t.label = label
 		return nil
 	}
-	// natyv has no cascading delete -- destroying the panel alone leaves the
-	// label (its child) still registered and still drawn, so the box
-	// disappears but the text doesn't.
+	// label is a real Clay child of panel, so destroying panel alone
+	// cascades through it too.
 	if t.panel != 0 {
-		t.label.Destroy()
 		t.panel.Destroy()
 		t.panel = 0
 		t.label = 0
@@ -75,12 +73,8 @@ func (t *Tooltip) onHover(hovering bool) error {
 // a panel that's already open.
 func (t *Tooltip) SetMessage(message string) { t.message = message }
 
-// Destroy closes the tooltip (if currently shown) and destroys the trigger
-// itself.
+// Destroy destroys the trigger -- panel and label (if currently shown) are
+// real Clay descendants of it, so this alone cascades through both.
 func (t *Tooltip) Destroy() {
-	if t.panel != 0 {
-		t.label.Destroy()
-		t.panel.Destroy()
-	}
 	t.trigger.Destroy()
 }

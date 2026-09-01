@@ -302,14 +302,12 @@ func (m *Menu) openSubmenu(idx int) error {
 	return nil
 }
 
-// closeSubmenu destroys the submenu's items and panel (if open). Safe to
-// call whether or not the submenu is actually open.
+// closeSubmenu destroys the submenu's panel (and, since every subItem is a
+// real Clay child of it, every item along with it). Safe to call whether
+// or not the submenu is actually open.
 func (m *Menu) closeSubmenu() error {
 	if m.subPanel == 0 {
 		return nil
-	}
-	for _, item := range m.subItems {
-		item.Destroy()
 	}
 	m.subItems = nil
 	m.subPanel.Destroy()
@@ -359,17 +357,18 @@ func (m *Menu) selectSubItem(subIndex int) error {
 	return nil
 }
 
-// Close closes the dropdown (both levels, if open) -- safe to call whether
-// or not it actually is, same as every other close-cascade in this SDK.
+// Close closes the dropdown (both levels, if open) -- panel.Destroy() alone
+// would already cascade through items (and, transitively, a still-open
+// submenu too), but closeSubmenu is still called first for its own
+// state-reset side effects (subOpenIndex/subHighlighted). Safe to call
+// whether or not it actually is, same as every other close-cascade in this
+// SDK.
 func (m *Menu) Close() error {
 	if err := m.closeSubmenu(); err != nil {
 		return err
 	}
 	if m.panel == 0 {
 		return nil
-	}
-	for _, item := range m.items {
-		item.Destroy()
 	}
 	m.items = nil
 	m.panel.Destroy()
@@ -378,8 +377,9 @@ func (m *Menu) Close() error {
 	return nil
 }
 
-// Destroy closes the dropdown (if open) and destroys the trigger itself.
+// Destroy destroys the trigger -- panel, items, and a still-open submenu
+// (if any) are all real Clay descendants of it, so this alone cascades
+// through everything, no need to call Close() first.
 func (m *Menu) Destroy() {
-	_ = m.Close()
 	m.trigger.Destroy()
 }

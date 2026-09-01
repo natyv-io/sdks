@@ -67,16 +67,13 @@ func (c *Combobox) onKeyNav(key string) error {
 	return nil
 }
 
-// destroyWidgets destroys the currently-visible option buttons and the
-// panel itself (if open), without touching highlighted -- render's
-// low-level half, split out so it can rebuild without wiping the highlight
-// it's about to reapply.
+// destroyWidgets destroys the panel (if open) -- visible is a real Clay
+// child of it, so this alone cascades through every option button too.
+// Doesn't touch highlighted -- render's low-level half, split out so it
+// can rebuild without wiping the highlight it's about to reapply.
 func (c *Combobox) destroyWidgets() {
 	if c.panel == 0 {
 		return
-	}
-	for _, b := range c.visible {
-		b.Destroy()
 	}
 	c.panel.Destroy()
 	c.panel = 0
@@ -183,8 +180,9 @@ func (c *Combobox) OnSelect(handler func(index int) error) { c.onSelect = handle
 func (c *Combobox) Text() (string, error)     { return c.field.Text() }
 func (c *Combobox) SetText(text string) error { return c.field.SetText(text) }
 
-// Destroy closes the combobox (if open) and destroys the field itself.
+// Destroy destroys the field -- panel and every option button (if open)
+// are real Clay descendants of it, so this alone cascades through
+// everything, no need to call destroyWidgets first.
 func (c *Combobox) Destroy() {
-	c.destroyWidgets()
 	c.field.Destroy()
 }

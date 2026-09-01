@@ -22,14 +22,14 @@ const popoverChildGap uint16 = 8
 type Popover struct {
 	trigger Button
 	panel   Container
-	// ownIDs is every widget id build's own last call created -- both for
-	// Close to destroy them explicitly (natyv has no cascading delete, see
-	// Dialog's own doc comment for the same reasoning) and so their own
-	// blur can be wired to keep the popover open while focus is still
-	// somewhere inside it. Includes non-focusable ids too (a plain Label)
-	// -- wiring blur on something that can never actually receive focus is
-	// harmless, and simpler than asking build to separate "interactive"
-	// from "decorative" children itself.
+	// ownIDs is every widget id build's own last call created -- needed so
+	// their own blur can be wired to keep the popover open while focus is
+	// still somewhere inside it (not for destroy purposes anymore: every
+	// id here is a real Clay descendant of panel, so panel.Destroy() alone
+	// already cascades through all of them). Includes non-focusable ids
+	// too (a plain Label) -- wiring blur on something that can never
+	// actually receive focus is harmless, and simpler than asking build to
+	// separate "interactive" from "decorative" children itself.
 	ownIDs []uint32
 	build  func(panelID uint32) ([]uint32, error)
 	width  float32
@@ -113,16 +113,13 @@ func (p *Popover) onBlur(newFocusID uint32) error {
 	return p.Close()
 }
 
-// Close destroys every widget build created (see ownIDs' own doc comment
-// for why that's every returned id, not just the "interactive" ones) and
-// the panel itself -- safe to call whether or not the popover is actually
-// open, same as every other close-cascade in this SDK.
+// Close destroys the panel (and, since every id build returned is a real
+// Clay descendant of it, everything build created along with it) -- safe
+// to call whether or not the popover is actually open, same as every
+// other close-cascade in this SDK.
 func (p *Popover) Close() error {
 	if p.panel == 0 {
 		return nil
-	}
-	for _, id := range p.ownIDs {
-		internal.DestroyWidget(id)
 	}
 	p.ownIDs = nil
 	p.panel.Destroy()
@@ -130,8 +127,9 @@ func (p *Popover) Close() error {
 	return nil
 }
 
-// Destroy closes the popover (if open) and destroys the trigger itself.
+// Destroy destroys the trigger -- panel (if open) and everything build
+// created are real Clay descendants of it, so this alone cascades through
+// everything, no need to call Close() first.
 func (p *Popover) Destroy() {
-	_ = p.Close()
 	p.trigger.Destroy()
 }

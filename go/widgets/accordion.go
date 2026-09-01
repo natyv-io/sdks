@@ -74,9 +74,11 @@ func chevronLabel(title string, expanded bool) string {
 
 func (s *AccordionSection) Expanded() bool { return s.expanded }
 
-// Destroy destroys the header and content explicitly -- natyv has no
-// cascading delete, same explicit-per-child pattern Tabs.Destroy/
-// Dialog.close already use for their own multi-widget composition.
+// Destroy destroys the header and content explicitly -- they're separate
+// siblings under whatever container the caller parented them in
+// (headerLayout/contentLayout, see CreateAccordionSection), not
+// parent-child of one another, so there's no single root a cascading
+// destroy could reach both through.
 func (s *AccordionSection) Destroy() {
 	s.header.Destroy()
 	s.Content.Destroy()

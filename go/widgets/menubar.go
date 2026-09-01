@@ -86,11 +86,10 @@ func (mb *MenuBar) OnSelect(handler func(barIndex, itemIndex, subIndex int) erro
 	}
 }
 
-// Destroy destroys every Menu this bar created (each closes its own
-// dropdown first, if open), then the bar Container itself.
+// Destroy destroys the bar Container -- every Menu's own trigger is a real
+// Clay child of it (and everything each Menu itself created is, in turn, a
+// descendant of that trigger), so this alone cascades through the entire
+// bar.
 func (mb *MenuBar) Destroy() {
-	for _, menu := range mb.menus {
-		menu.Destroy()
-	}
 	mb.bar.Destroy()
 }

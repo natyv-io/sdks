@@ -306,14 +306,8 @@ func (t *Tree) render(scrollOffsetY float32) error {
 	return nil
 }
 
-// Destroy destroys every widget this Tree ever created -- natyv has no
-// cascading delete, same explicit-per-child pattern every other
-// multi-widget composition in this SDK already uses.
+// Destroy destroys the viewport -- every row, topSpacer, and bottomSpacer
+// is a real Clay child of it, so this alone cascades through all of them.
 func (t *Tree) Destroy() {
-	for _, row := range t.rowPool {
-		row.Destroy()
-	}
-	t.topSpacer.Destroy()
-	t.bottomSpacer.Destroy()
 	t.viewport.Destroy()
 }
