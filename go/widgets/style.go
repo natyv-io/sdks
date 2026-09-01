@@ -3,7 +3,7 @@ package widgets
 import (
 	"fmt"
 
-	"natyv/sdk/widgets/internal"
+	"github.com/natyv-io/sdks/go/widgets/internal"
 )
 
 // Color is a resolved style color -- 0..1 floats, matching the stylesheet

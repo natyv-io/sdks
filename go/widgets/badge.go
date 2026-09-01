@@ -5,7 +5,7 @@ import (
 
 	"github.com/extism/go-pdk"
 
-	"natyv/sdk/widgets/internal"
+	"github.com/natyv-io/sdks/go/widgets/internal"
 )
 
 //go:wasmimport extism:host/user natyv_clay_create_badge

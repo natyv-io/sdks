@@ -3,7 +3,7 @@ package widgets
 import (
 	"sort"
 
-	"natyv/sdk/widgets/internal"
+	"github.com/natyv-io/sdks/go/widgets/internal"
 )
 
 // tableHeaderHeight is the header row's own fixed height -- not

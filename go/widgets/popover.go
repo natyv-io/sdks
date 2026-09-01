@@ -1,6 +1,6 @@
 package widgets
 
-import "natyv/sdk/widgets/internal"
+import "github.com/natyv-io/sdks/go/widgets/internal"
 
 // popoverPadding/popoverChildGap are the panel's own fixed layout
 // constants -- not caller-configurable, same "one sensible default"

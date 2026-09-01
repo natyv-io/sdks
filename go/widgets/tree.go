@@ -3,7 +3,7 @@ package widgets
 import (
 	"strings"
 
-	"natyv/sdk/widgets/internal"
+	"github.com/natyv-io/sdks/go/widgets/internal"
 )
 
 // indentPerDepth is how far each nesting level shifts a row's own label.

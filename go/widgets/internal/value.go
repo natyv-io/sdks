@@ -6,7 +6,7 @@
 // event registries (dispatch.go). None of this is meant to be called by
 // app code directly -- only by the `widgets` package's own per-widget
 // files, which is exactly what Go's `internal` import-path rule enforces:
-// nothing outside `natyv/sdk/widgets` can import this package at all.
+// nothing outside `github.com/natyv-io/sdks/go/widgets` can import this package at all.
 package internal
 
 import (

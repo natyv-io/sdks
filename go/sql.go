@@ -1,5 +1,5 @@
 // Package natyv is the base guest SDK -- SQLite access (this file) today.
-// Widget creation/interaction lives in the sibling natyv/sdk/widgets
+// Widget creation/interaction lives in the sibling github.com/natyv-io/sdks/go/widgets
 // package, not here; this package holds whatever isn't widget-specific.
 package natyv
 

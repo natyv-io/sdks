@@ -1,5 +1,5 @@
 // Package imap is a minimal IMAP4rev1 client built directly on
-// natyv/sdk's raw TCP/TLS primitives -- Extism guests have no access to a
+// github.com/natyv-io/sdks/go's raw TCP/TLS primitives -- Extism guests have no access to a
 // real net.Conn, so libraries like go-imap can't be used as-is (their
 // STARTTLS support references crypto/tls types TinyGo's wasip1 target
 // doesn't implement, which fails to compile even if that code path is
@@ -16,7 +16,7 @@ import (
 	"strconv"
 	"strings"
 
-	"natyv/sdk"
+	"github.com/natyv-io/sdks/go"
 )
 
 // Client is one open IMAP session.

@@ -1,5 +1,5 @@
 // Package smtp is a minimal SMTP submission client built directly on
-// natyv/sdk's raw TCP/TLS primitives -- Extism guests have no access to a
+// github.com/natyv-io/sdks/go's raw TCP/TLS primitives -- Extism guests have no access to a
 // real net.Conn, so the standard library's own net/smtp can't be used as
 // wrapped (it references crypto/tls types TinyGo's wasip1 target doesn't
 // implement, which fails to compile even if StartTLS is never called).
@@ -14,7 +14,7 @@ import (
 	"errors"
 	"strings"
 
-	"natyv/sdk"
+	"github.com/natyv-io/sdks/go"
 )
 
 // Client is one open SMTP session, past the initial greeting and EHLO.

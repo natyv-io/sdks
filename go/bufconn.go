@@ -1,6 +1,6 @@
 // Buffered line/exact-byte reading over a TcpConn -- shared by any
 // text-based protocol client built on top of raw TCP/TLS (see
-// natyv/sdk/imap, natyv/sdk/smtp). See tcp.go for the package-level doc
+// github.com/natyv-io/sdks/go/imap, github.com/natyv-io/sdks/go/smtp). See tcp.go for the package-level doc
 // comment.
 package natyv
 
