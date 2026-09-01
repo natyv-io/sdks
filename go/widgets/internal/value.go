@@ -497,6 +497,9 @@ func ShowSaveFileDialog(id uint32) error {
 	return nil
 }
 
+// DestroyWidget destroys id and every real descendant reachable via
+// parent_id (cascading, as of the mail-natyv demo app's real UI work --
+// see WidgetHost.destroyWidgetSubtree's own doc comment on the host side).
 func DestroyWidget(id uint32) {
 	// Best-effort: nothing meaningful for app code to do if this fails, and
 	// it only ever targets widgets this guest itself created.

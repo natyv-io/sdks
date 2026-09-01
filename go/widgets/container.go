@@ -24,8 +24,9 @@ type Container uint32
 // this isn't the start of a guest-controllable styling system. Pass false
 // for a plain layout-only container. durationMs is 0 for a Container that
 // never expires -- see WidgetHost.zig's Slot.expires_at_ms doc comment.
-// Non-zero destroys this Container (and every descendant -- host-driven
-// expiry cascades, unlike Destroy(), which stays explicit-per-child-only)
+// Non-zero destroys this Container (and every descendant -- both
+// host-driven expiry and a guest's own explicit Destroy() cascade to
+// descendants now, as of the mail-natyv demo app's real UI work)
 // automatically once that many milliseconds have passed, no guest polling/
 // timer needed.
 func CreateContainer(layout Layout, background bool, durationMs uint32) (Container, error) {
