@@ -349,6 +349,22 @@ func (cl *Client) FetchBody(seq int) (string, error) {
 	return string(items[0].Literal), nil
 }
 
+// Delete marks message sequence number seq as deleted and expunges it
+// immediately -- the standard IMAP way to remove a message
+// (STORE +FLAGS (\Deleted), then EXPUNGE). Real caveat, not something
+// this package can work around: against Gmail specifically, this archives
+// the message (removes it from the current mailbox's own view, moving it
+// to "All Mail") rather than permanently deleting it, the same behavior
+// every real IMAP client gets against Gmail without using its own
+// non-standard label extensions.
+func (cl *Client) Delete(seq int) error {
+	if _, err := cl.command("STORE " + strconv.Itoa(seq) + " +FLAGS (\\Deleted)"); err != nil {
+		return err
+	}
+	_, err := cl.command("EXPUNGE")
+	return err
+}
+
 // Logout ends the session and closes the underlying connection.
 func (cl *Client) Logout() error {
 	_, err := cl.command("LOGOUT")
