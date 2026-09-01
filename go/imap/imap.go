@@ -149,10 +149,49 @@ func (cl *Client) Login(user, pass string) error {
 	return err
 }
 
-// Select opens a mailbox (e.g. "INBOX", "Sent") for subsequent Fetch calls.
-func (cl *Client) Select(mailbox string) error {
-	_, err := cl.command("SELECT " + quote(mailbox))
-	return err
+// SelectInfo reports what the server told us about a mailbox just opened
+// via Select -- real state a caller almost always needs immediately after
+// (e.g. FetchHeaders needs a real sequence-number range, and there's no
+// way to know one without knowing how many messages exist).
+type SelectInfo struct {
+	Exists int // total messages in this mailbox right now
+	Recent int // messages flagged \Recent since the last SELECT by any client
+}
+
+// parseUntaggedCount matches an untagged "* N <word>" response, e.g.
+// "* 42 EXISTS" or "* 3 RECENT".
+func parseUntaggedCount(line, word string) (int, bool) {
+	if !strings.HasPrefix(line, "* ") {
+		return 0, false
+	}
+	rest := line[2:]
+	sp := strings.IndexByte(rest, ' ')
+	if sp < 0 {
+		return 0, false
+	}
+	n, err := strconv.Atoi(rest[:sp])
+	if err != nil || rest[sp+1:] != word {
+		return 0, false
+	}
+	return n, true
+}
+
+// Select opens a mailbox (e.g. "INBOX", "[Gmail]/Sent Mail") for subsequent
+// Fetch calls.
+func (cl *Client) Select(mailbox string) (SelectInfo, error) {
+	untagged, err := cl.command("SELECT " + quote(mailbox))
+	if err != nil {
+		return SelectInfo{}, err
+	}
+	var info SelectInfo
+	for _, line := range untagged {
+		if n, ok := parseUntaggedCount(line, "EXISTS"); ok {
+			info.Exists = n
+		} else if n, ok := parseUntaggedCount(line, "RECENT"); ok {
+			info.Recent = n
+		}
+	}
+	return info, nil
 }
 
 // FetchItem is one untagged "* N FETCH (...)" response, split at the point
