@@ -401,6 +401,12 @@ func (p *DateTimePicker) selectDay(day int) error {
 	return nil
 }
 
+// ID is the widget id `.ntx`'s own `styles={...}`/`ref={...}` codegen
+// targets, since DateTimePicker (unlike Container/Button/...) isn't
+// itself a uint32-based type -- see ntx/Codegen.zig's
+// `isStructBackedWidgetKind`.
+func (p *DateTimePicker) ID() uint32 { return uint32(p.trigger) }
+
 // Destroy destroys the trigger -- panel (if open) and everything under it
 // are real Clay descendants of it, so this alone cascades through
 // everything, no need to call close() first.

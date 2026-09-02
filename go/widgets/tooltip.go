@@ -73,6 +73,11 @@ func (t *Tooltip) onHover(hovering bool) error {
 // a panel that's already open.
 func (t *Tooltip) SetMessage(message string) { t.message = message }
 
+// ID is the widget id `.ntx`'s own `styles={...}`/`ref={...}` codegen
+// targets, since Tooltip (unlike Container/Button/...) isn't itself a
+// uint32-based type -- see ntx/Codegen.zig's `isStructBackedWidgetKind`.
+func (t *Tooltip) ID() uint32 { return uint32(t.trigger) }
+
 // Destroy destroys the trigger -- panel and label (if currently shown) are
 // real Clay descendants of it, so this alone cascades through both.
 func (t *Tooltip) Destroy() {
