@@ -53,5 +53,12 @@ func CreateDropdown(layout Layout, triggerLabel string, options []string) (*Drop
 // OnSelect/OnClick registration in this SDK expects.
 func (d *Dropdown) OnSelect(handler func(index int) error) { d.onSelect = handler }
 
+// ID is the widget id `.ntx`'s own `styles={...}`/`ref={...}` codegen
+// targets, since Dropdown (unlike Container/Button/...) isn't itself a
+// uint32-based type -- see ntx/Codegen.zig's `isStructBackedWidgetKind`.
+// Delegates to the underlying Menu's own trigger, the same widget the
+// dropdown visually renders as.
+func (d *Dropdown) ID() uint32 { return d.menu.ID() }
+
 // Destroy destroys the underlying Menu (trigger and, if open, the panel).
 func (d *Dropdown) Destroy() { d.menu.Destroy() }

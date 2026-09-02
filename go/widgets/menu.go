@@ -377,6 +377,11 @@ func (m *Menu) Close() error {
 	return nil
 }
 
+// ID is the widget id `.ntx`'s own `styles={...}`/`ref={...}` codegen
+// targets, since Menu (unlike Container/Button/...) isn't itself a
+// uint32-based type -- see ntx/Codegen.zig's `isStructBackedWidgetKind`.
+func (m *Menu) ID() uint32 { return uint32(m.trigger) }
+
 // Destroy destroys the trigger -- panel, items, and a still-open submenu
 // (if any) are all real Clay descendants of it, so this alone cascades
 // through everything, no need to call Close() first.

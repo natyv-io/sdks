@@ -180,6 +180,11 @@ func (c *Combobox) OnSelect(handler func(index int) error) { c.onSelect = handle
 func (c *Combobox) Text() (string, error)     { return c.field.Text() }
 func (c *Combobox) SetText(text string) error { return c.field.SetText(text) }
 
+// ID is the widget id `.ntx`'s own `styles={...}`/`ref={...}` codegen
+// targets, since Combobox (unlike Container/Button/...) isn't itself a
+// uint32-based type -- see ntx/Codegen.zig's `isStructBackedWidgetKind`.
+func (c *Combobox) ID() uint32 { return uint32(c.field) }
+
 // Destroy destroys the field -- panel and every option button (if open)
 // are real Clay descendants of it, so this alone cascades through
 // everything, no need to call destroyWidgets first.

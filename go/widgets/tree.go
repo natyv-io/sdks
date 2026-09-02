@@ -306,6 +306,11 @@ func (t *Tree) render(scrollOffsetY float32) error {
 	return nil
 }
 
+// ID is the widget id `.ntx`'s own `styles={...}`/`ref={...}` codegen
+// targets, since Tree (unlike Container/Button/...) isn't itself a
+// uint32-based type -- see ntx/Codegen.zig's `isStructBackedWidgetKind`.
+func (t *Tree) ID() uint32 { return uint32(t.viewport) }
+
 // Destroy destroys the viewport -- every row, topSpacer, and bottomSpacer
 // is a real Clay child of it, so this alone cascades through all of them.
 func (t *Tree) Destroy() {

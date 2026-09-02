@@ -314,6 +314,11 @@ func (t *Table) sortBy(col int) error {
 	return t.render(t.lastScrollOffsetY)
 }
 
+// ID is the widget id `.ntx`'s own `styles={...}`/`ref={...}` codegen
+// targets, since Table (unlike Container/Button/...) isn't itself a
+// uint32-based type -- see ntx/Codegen.zig's `isStructBackedWidgetKind`.
+func (t *Table) ID() uint32 { return uint32(t.wrapper) }
+
 // Destroy destroys the wrapper -- header, headerBtns, viewport, every row,
 // every cell, and both spacers are all real Clay descendants of it, so
 // this alone cascades through the entire table. Safe to call at any point

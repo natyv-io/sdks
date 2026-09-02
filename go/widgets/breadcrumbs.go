@@ -122,6 +122,11 @@ func (b Breadcrumbs) OnCrumbClick(handler func(index int) error) {
 	}
 }
 
+// ID is the widget id `.ntx`'s own `styles={...}`/`ref={...}` codegen
+// targets, since Breadcrumbs (unlike Container/Button/...) isn't itself a
+// uint32-based type -- see ntx/Codegen.zig's `isStructBackedWidgetKind`.
+func (b Breadcrumbs) ID() uint32 { return b.root }
+
 // Destroy destroys the whole trail -- every crumb Button and separator
 // Label is a real Clay child of root, so destroying root alone cascades to
 // all of them.

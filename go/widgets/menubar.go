@@ -86,6 +86,11 @@ func (mb *MenuBar) OnSelect(handler func(barIndex, itemIndex, subIndex int) erro
 	}
 }
 
+// ID is the widget id `.ntx`'s own `styles={...}`/`ref={...}` codegen
+// targets, since MenuBar (unlike Container/Button/...) isn't itself a
+// uint32-based type -- see ntx/Codegen.zig's `isStructBackedWidgetKind`.
+func (mb *MenuBar) ID() uint32 { return uint32(mb.bar) }
+
 // Destroy destroys the bar Container -- every Menu's own trigger is a real
 // Clay child of it (and everything each Menu itself created is, in turn, a
 // descendant of that trigger), so this alone cascades through the entire
