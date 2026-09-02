@@ -46,6 +46,9 @@ func natyvDestroyWidgetHost(uint64) uint64
 //go:wasmimport extism:host/user natyv_set_visible
 func natyvSetVisibleHost(uint64) uint64
 
+//go:wasmimport extism:host/user natyv_set_enabled
+func natyvSetEnabledHost(uint64) uint64
+
 //go:wasmimport extism:host/user natyv_set_size
 func natyvSetSizeHost(uint64) uint64
 
@@ -271,6 +274,31 @@ func SetVisible(id uint32, visible bool) error {
 		Error string `json:"error,omitempty"`
 	}
 	if err := json.Unmarshal(pdk.ParamBytes(natyvSetVisibleHost(pdk.ResultBytes(body))), &resp); err != nil {
+		return err
+	}
+	if resp.Error != "" {
+		return errors.New(resp.Error)
+	}
+	return nil
+}
+
+// SetEnabled -- see host-side WidgetHostFunctions.zig's setEnabledHostFn
+// doc comment. Built for Button's own real "< N >" pager use (disabled at
+// either end of the page range) but generic to any widget id, same
+// "generic per-slot toggle" shape SetVisible already established --
+// though only Button actually reads it host-side today.
+func SetEnabled(id uint32, enabled bool) error {
+	body, err := json.Marshal(struct {
+		WidgetID uint32 `json:"widget_id"`
+		Enabled  bool   `json:"enabled"`
+	}{id, enabled})
+	if err != nil {
+		return err
+	}
+	var resp struct {
+		Error string `json:"error,omitempty"`
+	}
+	if err := json.Unmarshal(pdk.ParamBytes(natyvSetEnabledHost(pdk.ResultBytes(body))), &resp); err != nil {
 		return err
 	}
 	if resp.Error != "" {

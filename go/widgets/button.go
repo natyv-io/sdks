@@ -67,4 +67,12 @@ func (b Button) OnKeyNav(handler func(key string) error) {
 // need, rather than destroying/recreating rows on every render).
 func (b Button) SetVisible(visible bool) error { return internal.SetVisible(uint32(b), visible) }
 
+// SetEnabled disables this Button -- it ignores clicks (no flash, no
+// OnClick, no hover/pointer-cursor affordance) and renders a fixed muted
+// gray regardless of any styles= backgroundColor, until re-enabled. Built
+// for a real "< N >" pager (disabled at either end of the page range)
+// instead of hiding the buttons entirely. See internal.SetEnabled's own
+// doc comment.
+func (b Button) SetEnabled(enabled bool) error { return internal.SetEnabled(uint32(b), enabled) }
+
 func (b Button) Destroy() { internal.DestroyWidget(uint32(b)) }
