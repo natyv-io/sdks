@@ -45,6 +45,15 @@ func CreateContainer(layout Layout, background bool, durationMs uint32) (Contain
 	return Container(resp.WidgetID), nil
 }
 
+// OnClick registers a handler for a real click anywhere inside this
+// Container's own bounds -- e.g. an entire list row/card made clickable,
+// rather than requiring a separate Button inside it. Host-side (2026-09-02):
+// a click lands on the *most specific* interactive widget under the
+// pointer, so clicking a real Button/Checkbox/Toggle/RadioButton nested
+// inside this Container fires that widget's own click instead of this one,
+// never both.
+func (c Container) OnClick(handler func() error) { internal.RegisterClick(uint32(c), handler) }
+
 // OnDismiss registers the handler for a modal's "please close" request --
 // fired on Escape or a backdrop click while this Container is the topmost
 // open modal (Layout.Modal was true at CreateContainer time). The host
