@@ -60,4 +60,11 @@ func (c Container) OnDismiss(handler func() error) { internal.RegisterDismiss(ui
 // doc comment. Width is untouched.
 func (c Container) SetHeight(height float32) error { return internal.SetHeight(uint32(c), height) }
 
+// SetVisible shows or hides this Container's whole subtree without
+// destroying it -- see internal.SetVisible's own doc comment. Lets a guest
+// keep a built view alive and instantly swap it back in later instead of
+// destroying and recreating it (a real, visible rebuild flash) every time
+// the same view is shown again.
+func (c Container) SetVisible(visible bool) error { return internal.SetVisible(uint32(c), visible) }
+
 func (c Container) Destroy() { internal.DestroyWidget(uint32(c)) }
