@@ -51,6 +51,11 @@ func (t *ToastStack) Show(width, height float32, durationMs uint32, message stri
 	return err
 }
 
+// ID is the widget id `.ntx`'s own `styles={...}`/`ref={...}` codegen
+// targets, since ToastStack (unlike Container/Button/...) isn't itself a
+// uint32-based type -- see ntx/Codegen.zig's `isStructBackedWidgetKind`.
+func (t *ToastStack) ID() uint32 { return uint32(t.container) }
+
 // Destroy destroys the stack container -- any still-live (not yet expired)
 // toasts, and their own message Labels, are real Clay descendants of it,
 // so this cascades through them too, a clean teardown regardless of

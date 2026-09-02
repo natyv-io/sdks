@@ -74,6 +74,14 @@ func chevronLabel(title string, expanded bool) string {
 
 func (s *AccordionSection) Expanded() bool { return s.expanded }
 
+// ID is the widget id `.ntx`'s own `styles={...}`/`ref={...}` codegen
+// targets, since AccordionSection (unlike Container/Button/...) isn't
+// itself a uint32-based type -- see ntx/Codegen.zig's
+// `isStructBackedWidgetKind`. Targets the header (the section's own
+// visible/clickable part) -- Content is a separate sibling, not a
+// descendant of header, so there's no single id that would cover both.
+func (s *AccordionSection) ID() uint32 { return uint32(s.header) }
+
 // Destroy destroys the header and content explicitly -- they're separate
 // siblings under whatever container the caller parented them in
 // (headerLayout/contentLayout, see CreateAccordionSection), not

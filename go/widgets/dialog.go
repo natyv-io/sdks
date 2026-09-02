@@ -89,6 +89,11 @@ func CreateDialog(title, message string, buttonLabels []string) (Dialog, error) 
 	return d, nil
 }
 
+// ID is the widget id `.ntx`'s own `styles={...}`/`ref={...}` codegen
+// targets, since Dialog (unlike Container/Button/...) isn't itself a
+// uint32-based type -- see ntx/Codegen.zig's `isStructBackedWidgetKind`.
+func (d Dialog) ID() uint32 { return d.root }
+
 // close destroys the whole dialog -- root alone cascades through every
 // label/row/button it created, see the type doc comment. Harmless if
 // called more than once (e.g. Escape racing a button click that already

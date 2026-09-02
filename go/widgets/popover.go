@@ -127,6 +127,11 @@ func (p *Popover) Close() error {
 	return nil
 }
 
+// ID is the widget id `.ntx`'s own `styles={...}`/`ref={...}` codegen
+// targets, since Popover (unlike Container/Button/...) isn't itself a
+// uint32-based type -- see ntx/Codegen.zig's `isStructBackedWidgetKind`.
+func (p *Popover) ID() uint32 { return uint32(p.trigger) }
+
 // Destroy destroys the trigger -- panel (if open) and everything build
 // created are real Clay descendants of it, so this alone cascades through
 // everything, no need to call Close() first.

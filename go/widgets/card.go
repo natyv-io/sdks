@@ -72,6 +72,14 @@ func CreateCard(layout Layout, title string) (*Card, error) {
 // call, the same way any other Container's own id is used as a parent.
 func (c *Card) ContentID() uint32 { return uint32(c.content) }
 
+// ID is the widget id `.ntx`'s own `styles={...}`/`ref={...}` codegen
+// targets, since Card (unlike Container/Button/...) isn't itself a
+// uint32-based type -- see ntx/Codegen.zig's `isStructBackedWidgetKind`.
+// Targets the outer panel (title/divider/content are all real Clay
+// descendants of it), distinct from ContentID() above -- that one is for
+// parenting your own content, this one is for styling the card itself.
+func (c *Card) ID() uint32 { return uint32(c.panel) }
+
 // SetTitle updates the title text -- a no-op if CreateCard was given "" (no
 // title row exists to update).
 func (c *Card) SetTitle(title string) error {
