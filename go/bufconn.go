@@ -16,6 +16,14 @@ package natyv
 type BufferedConn struct {
 	Conn TcpConn
 	buf  []byte
+	// readMore stands in for a real TcpRead call in tests -- nil in every
+	// real (production) BufferedConn, which always goes through TcpRead
+	// itself; a wasmimport host function call can't be exercised by a
+	// plain `go test` run at all, so this is the only seam that lets
+	// ReadLine's own CRLF-split-across-reads handling get a real,
+	// deterministic unit test rather than relying on live verification
+	// alone (see ReadLine's own doc comment for the bug this covers).
+	readMore func(maxLen int) ([]byte, error)
 }
 
 // NewBufferedConn wraps an already-open TcpConn (from TcpConnect).
@@ -23,11 +31,18 @@ func NewBufferedConn(conn TcpConn) *BufferedConn {
 	return &BufferedConn{Conn: conn}
 }
 
+func (b *BufferedConn) readChunk(maxLen int) ([]byte, error) {
+	if b.readMore != nil {
+		return b.readMore(maxLen)
+	}
+	return TcpRead(b.Conn, maxLen)
+}
+
 func (b *BufferedConn) fill() error {
 	if len(b.buf) > 0 {
 		return nil
 	}
-	data, err := TcpRead(b.Conn, 4096)
+	data, err := b.readChunk(4096)
 	if err != nil {
 		return err
 	}
@@ -45,6 +60,19 @@ func indexCRLF(data []byte) int {
 }
 
 // ReadLine returns one CRLF-terminated line, without the trailing CRLF.
+//
+// Real bug, found live (natyv-io/mail-natyv's own Inbox silently dropping
+// exactly one message on some refreshes, traced down to a raw TCP read
+// split precisely between a line's trailing '\r' and '\n'): the naive
+// "no CRLF found yet, flush the whole buffer into line and fetch more"
+// loop below used to flush a trailing lone '\r' into `line` too. Once that
+// happened, the matching '\n' arrived as the *next* read's own leading
+// byte with no preceding '\r' left anywhere in `b.buf` for indexCRLF to
+// pair it with -- the scan would sail past it and match some *later* real
+// CRLF instead, silently absorbing an entire intervening response line
+// (framing, literal, and all) as if it were this line's own content. A
+// trailing lone '\r' is held back in `b.buf` instead of being flushed, so
+// the next read's leading byte can still complete the pair correctly.
 func (b *BufferedConn) ReadLine() (string, error) {
 	var line []byte
 	for {
@@ -53,11 +81,20 @@ func (b *BufferedConn) ReadLine() (string, error) {
 			b.buf = b.buf[i+2:]
 			return string(line), nil
 		}
-		line = append(line, b.buf...)
-		b.buf = nil
-		if err := b.fill(); err != nil {
+		flush := len(b.buf)
+		if flush > 0 && b.buf[flush-1] == '\r' {
+			flush--
+		}
+		line = append(line, b.buf[:flush]...)
+		pending := b.buf[flush:]
+		// Bypasses fill()'s own "b.buf already has data, skip the read"
+		// short-circuit -- a held-back pending '\r' would otherwise
+		// prevent it from ever fetching more.
+		data, err := b.readChunk(4096)
+		if err != nil {
 			return "", err
 		}
+		b.buf = append(append([]byte{}, pending...), data...)
 	}
 }
 
