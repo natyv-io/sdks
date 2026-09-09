@@ -77,3 +77,24 @@ func (c Container) SetHeight(height float32) error { return internal.SetHeight(u
 func (c Container) SetVisible(visible bool) error { return internal.SetVisible(uint32(c), visible) }
 
 func (c Container) Destroy() { internal.DestroyWidget(uint32(c)) }
+
+// DestroyChildren destroys every current descendant of this Container but
+// keeps the Container itself alive -- the rebuildable-region primitive
+// (see natyv.RegisterRebuildFunc/SetActiveRegion): a region's own resume
+// path calls this on its stable parent right before re-invoking the
+// region's registered rebuild function, so the parent's own id (which the
+// guest may hold a persisted reference to) never changes while its
+// contents get torn down and recreated fresh.
+func (c Container) DestroyChildren() error { return internal.DestroyChildren(uint32(c)) }
+
+// DestroyChildrenExcept destroys every current child of c except except's
+// own subtree, which survives intact -- the make-before-break region-swap
+// primitive (see natyv.RegisterRebuildFunc/SetActiveRegion): a region's
+// resume path builds a replacement subtree as a hidden new child of c
+// first, and only once it's fully built calls this to remove the previous
+// content -- so the previous content stays visible for the entire time
+// the replacement is being built, instead of the region going empty
+// first.
+func (c Container) DestroyChildrenExcept(except Container) error {
+	return internal.DestroyChildrenExcept(uint32(c), uint32(except))
+}

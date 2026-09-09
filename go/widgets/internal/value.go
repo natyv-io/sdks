@@ -43,6 +43,12 @@ func natyvGetTextHost(uint64) uint64
 //go:wasmimport extism:host/user natyv_destroy_widget
 func natyvDestroyWidgetHost(uint64) uint64
 
+//go:wasmimport extism:host/user natyv_destroy_children
+func natyvDestroyChildrenHost(uint64) uint64
+
+//go:wasmimport extism:host/user natyv_destroy_children_except
+func natyvDestroyChildrenExceptHost(uint64) uint64
+
 //go:wasmimport extism:host/user natyv_set_visible
 func natyvSetVisibleHost(uint64) uint64
 
@@ -538,4 +544,58 @@ func DestroyWidget(id uint32) {
 		return
 	}
 	_ = natyvDestroyWidgetHost(pdk.ResultBytes(body))
+}
+
+// DestroyChildren destroys every current descendant of id but keeps id
+// itself alive -- the rebuildable-region primitive (see
+// WidgetHost.destroyWidgetChildren's own doc comment on the host side).
+// Unlike DestroyWidget, this returns a real error: a region's resume path
+// needs to know the teardown actually happened before it calls the
+// region's own registered rebuild function, since proceeding to rebuild
+// on top of a teardown that silently failed would duplicate content
+// instead of replacing it.
+func DestroyChildren(id uint32) error {
+	body, err := json.Marshal(struct {
+		WidgetID uint32 `json:"widget_id"`
+	}{id})
+	if err != nil {
+		return err
+	}
+	var resp struct {
+		Error string `json:"error,omitempty"`
+	}
+	if err := json.Unmarshal(pdk.ParamBytes(natyvDestroyChildrenHost(pdk.ResultBytes(body))), &resp); err != nil {
+		return err
+	}
+	if resp.Error != "" {
+		return errors.New(resp.Error)
+	}
+	return nil
+}
+
+// DestroyChildrenExcept destroys every current descendant of id except
+// exceptID's own subtree, which survives intact -- the make-before-break
+// region-swap primitive (see WidgetHost.destroyWidgetChildrenExcept's own
+// doc comment on the host side). A region's resume path calls this after
+// successfully building a replacement subtree (exceptID) as a hidden
+// sibling of whatever it's about to replace, so the previous content
+// stays visible for the entire time the replacement is being built.
+func DestroyChildrenExcept(id, exceptID uint32) error {
+	body, err := json.Marshal(struct {
+		WidgetID uint32 `json:"widget_id"`
+		ExceptID uint32 `json:"except_id"`
+	}{id, exceptID})
+	if err != nil {
+		return err
+	}
+	var resp struct {
+		Error string `json:"error,omitempty"`
+	}
+	if err := json.Unmarshal(pdk.ParamBytes(natyvDestroyChildrenExceptHost(pdk.ResultBytes(body))), &resp); err != nil {
+		return err
+	}
+	if resp.Error != "" {
+		return errors.New(resp.Error)
+	}
+	return nil
 }
