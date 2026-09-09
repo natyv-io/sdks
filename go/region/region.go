@@ -39,13 +39,50 @@ import (
 	"github.com/natyv-io/sdks/go/persistjson"
 )
 
+// ContentLayout carries the subset of widgets.Layout that determines how a
+// region's own content is arranged -- captured at SetActiveRegion time
+// (the caller already knows this, since it just built the real content
+// under this same layout) and threaded through to Restore's staging
+// container so it matches what the region's real content actually needs,
+// instead of CreateChild's own generic caller deciding on a fixed default
+// with no way to know the region's real Direction/Padding/etc. Real,
+// live-caught bug this fixes (2026-09-09, spikes/memory-recycle-phase2):
+// a staging container built with no Direction set falls back to the host's
+// own left_to_right leaf-widget default, silently re-laying out a
+// TopToBottom region's content as a row the first time it's rebuilt after
+// a recycle -- see project_natyv_ergonomics_layer memory for the full
+// finding.
+//
+// Deliberately NOT the real widgets.Layout -- this package stays free of
+// any widgets import (see this file's own doc comment on why), and most of
+// Layout's fields are meaningless or actively wrong for a staging
+// container: its ParentID is always CreateChild's own parentID, its Sizing
+// is always Grow/Grow (a region fills whatever space its stable parent
+// leaves it, unchanged by this), and it can never itself be a
+// floating/modal/toast layer.
+type ContentLayout struct {
+	Direction        string
+	PaddingLeft      uint16
+	PaddingRight     uint16
+	PaddingTop       uint16
+	PaddingBottom    uint16
+	ChildGap         uint16
+	ChildAlignX      string
+	ChildAlignY      string
+	ScrollVertical   bool
+	ScrollHorizontal bool
+}
+
 // ActiveRegion is one currently-active region: the stable parent widget id
 // it's rooted at, which registered function currently describes its
-// contents, and the exact arguments that function needs to reproduce them.
+// contents, the exact arguments that function needs to reproduce them, and
+// the layout its content actually needs (see ContentLayout's own doc
+// comment).
 type ActiveRegion struct {
 	ParentID uint32          `json:"parent_id"`
 	FuncName string          `json:"func_name"`
 	Args     json.RawMessage `json:"args"`
+	Content  ContentLayout   `json:"content_layout"`
 }
 
 // Registry holds the name->rebuild-function map and the currently-active
@@ -54,10 +91,11 @@ type ActiveRegion struct {
 // construct their own with fakes to verify the mechanism without a real
 // host.
 type Registry struct {
-	// CreateChild creates a new, already-hidden child of parentID and
-	// returns its id -- the make-before-break swap's staging container.
-	// Never nil once constructed via NewRegistry.
-	CreateChild func(parentID uint32) (uint32, error)
+	// CreateChild creates a new, already-hidden child of parentID, laid out
+	// per content (see ContentLayout's own doc comment), and returns its id
+	// -- the make-before-break swap's staging container. Never nil once
+	// constructed via NewRegistry.
+	CreateChild func(parentID uint32, content ContentLayout) (uint32, error)
 
 	// SetVisible shows or hides id's whole subtree without destroying it.
 	// Never nil once constructed via NewRegistry.
@@ -100,7 +138,7 @@ type Registry struct {
 // primitives Restore's make-before-break swap needs -- see each field's
 // own doc comment above for what it does.
 func NewRegistry(
-	createChild func(parentID uint32) (uint32, error),
+	createChild func(parentID uint32, content ContentLayout) (uint32, error),
 	setVisible func(id uint32, visible bool) error,
 	destroyWidget func(id uint32),
 	destroyChildrenExcept func(parentID, exceptID uint32) error,
@@ -134,14 +172,16 @@ func (r *Registry) RegisterRebuildFunc(name string, fn func(parentID uint32, arg
 // Call this every time the app rebuilds this region normally -- exactly
 // where it already does its own "I just rebuilt this" bookkeeping today.
 // args must be JSON-marshalable; this only serializes it, it never
-// inspects it.
+// inspects it. content is the same layout the caller just used to build
+// its own real content (see ContentLayout's own doc comment for why this
+// needs to be captured here rather than guessed by CreateChild later).
 //
 // Uses persistjson.Marshal, not stdlib encoding/json.Marshal: args is
 // arbitrary, dev-authored data (the same risk shape as a persisted var --
 // see the plan's "Safe serialization" section), and stdlib's own
 // encode-side panic-based error conversion doesn't survive TinyGo's
 // wasmexport/asyncify context.
-func (r *Registry) SetActiveRegion(parentID uint32, funcName string, args any) error {
+func (r *Registry) SetActiveRegion(parentID uint32, funcName string, args any, content ContentLayout) error {
 	encoded, err := persistjson.Marshal(args)
 	if err != nil {
 		return err
@@ -149,6 +189,7 @@ func (r *Registry) SetActiveRegion(parentID uint32, funcName string, args any) e
 	r.activeRegions[parentID] = ActiveRegion{
 		ParentID: parentID,
 		FuncName: funcName,
+		Content:  content,
 		Args:     encoded,
 	}
 	return nil
@@ -213,7 +254,7 @@ func (r *Registry) Restore(data json.RawMessage) error {
 		if !ok {
 			return fmt.Errorf("natyv: no rebuild function registered for %q", region.FuncName)
 		}
-		staging, err := r.CreateChild(region.ParentID)
+		staging, err := r.CreateChild(region.ParentID, region.Content)
 		if err != nil {
 			return err
 		}

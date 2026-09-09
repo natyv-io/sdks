@@ -19,9 +19,20 @@ import (
 )
 
 var regionRegistry = region.NewRegistry(
-	func(parentID uint32) (uint32, error) {
+	func(parentID uint32, content region.ContentLayout) (uint32, error) {
 		layout := widgets.ParentID(parentID)
 		layout.Sizing = widgets.Sizing{Width: widgets.Grow(), Height: widgets.Grow()}
+		layout.Direction = content.Direction
+		layout.Padding = widgets.Padding{
+			Left:   content.PaddingLeft,
+			Right:  content.PaddingRight,
+			Top:    content.PaddingTop,
+			Bottom: content.PaddingBottom,
+		}
+		layout.ChildGap = content.ChildGap
+		layout.ChildAlignment = widgets.Alignment{X: content.ChildAlignX, Y: content.ChildAlignY}
+		layout.ScrollVertical = content.ScrollVertical
+		layout.ScrollHorizontal = content.ScrollHorizontal
 		child, err := widgets.CreateContainer(layout, false, 0)
 		if err != nil {
 			return 0, err
@@ -66,8 +77,29 @@ func RegisterRebuildFunc(name string, fn func(parent widgets.Container, args jso
 // today (e.g. right where a real app updates its own view cache after a
 // render). args must be JSON-marshalable; this only serializes it, it
 // never inspects it.
-func SetActiveRegion(parent widgets.Container, funcName string, args any) error {
-	return regionRegistry.SetActiveRegion(uint32(parent), funcName, args)
+//
+// content should be the same Layout the caller just used to build its own
+// region content (the one passed to widgets.ParentID(...) for the
+// content's own top-level children) -- only the fields that actually
+// determine child arrangement are kept (Direction/Padding/ChildGap/
+// ChildAlignment/Scroll*); ParentID/Sizing/Floating/Modal/Toast are
+// ignored, since Restore's own staging container always controls those
+// itself. Passing a zero-value Layout{} reproduces the old, buggy
+// left_to_right-only behavior -- see region.ContentLayout's own doc
+// comment for the real bug this parameter exists to fix.
+func SetActiveRegion(parent widgets.Container, funcName string, args any, content widgets.Layout) error {
+	return regionRegistry.SetActiveRegion(uint32(parent), funcName, args, region.ContentLayout{
+		Direction:        content.Direction,
+		PaddingLeft:      content.Padding.Left,
+		PaddingRight:     content.Padding.Right,
+		PaddingTop:       content.Padding.Top,
+		PaddingBottom:    content.Padding.Bottom,
+		ChildGap:         content.ChildGap,
+		ChildAlignX:      content.ChildAlignment.X,
+		ChildAlignY:      content.ChildAlignment.Y,
+		ScrollVertical:   content.ScrollVertical,
+		ScrollHorizontal: content.ScrollHorizontal,
+	})
 }
 
 // SnapshotRegions serializes every currently-active region's recipe --

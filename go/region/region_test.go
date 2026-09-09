@@ -19,6 +19,11 @@ type fakeWorld struct {
 	nextID  uint32
 	parent  map[uint32]uint32
 	visible map[uint32]bool
+	// lastCreateChildContent records the ContentLayout passed to the most
+	// recent createChild call -- lets a test confirm SetActiveRegion's own
+	// content actually reaches CreateChild via Restore, not just that
+	// Restore runs at all.
+	lastCreateChildContent ContentLayout
 }
 
 func newFakeWorld(startID uint32) *fakeWorld {
@@ -34,10 +39,11 @@ func (w *fakeWorld) create(parentID uint32) uint32 {
 }
 
 // createChild mirrors the real CreateChild callback: a fresh child,
-// already hidden.
-func (w *fakeWorld) createChild(parentID uint32) (uint32, error) {
+// already hidden, recording the content it was asked to build with.
+func (w *fakeWorld) createChild(parentID uint32, content ContentLayout) (uint32, error) {
 	id := w.create(parentID)
 	w.visible[id] = false
+	w.lastCreateChildContent = content
 	return id, nil
 }
 
@@ -116,7 +122,8 @@ func TestRegionRoundTrip(t *testing.T) {
 	registry := noopRegistry(world)
 	registry.RegisterRebuildFunc("renderFolder", renderFolder)
 
-	if err := registry.SetActiveRegion(rootID, "renderFolder", struct{ Folder string }{"Inbox"}); err != nil {
+	wantContent := ContentLayout{Direction: "top_to_bottom", ChildGap: 8}
+	if err := registry.SetActiveRegion(rootID, "renderFolder", struct{ Folder string }{"Inbox"}, wantContent); err != nil {
 		t.Fatalf("SetActiveRegion: %v", err)
 	}
 	// The region's own initial build -- exactly where a real app would
@@ -178,6 +185,17 @@ func TestRegionRoundTrip(t *testing.T) {
 	if len(staged) != 2 {
 		t.Fatalf("expected 2 widgets built into the staging container, got %d: %v", len(staged), staged)
 	}
+
+	// The real regression this arc found live: a staging container built
+	// with no layout information falls back to the host's own
+	// left_to_right leaf-widget default, silently breaking a TopToBottom
+	// region's arrangement on its first post-recycle rebuild. Confirms the
+	// content SetActiveRegion was given on the OLD (pre-recycle) registry
+	// actually reaches CreateChild via the snapshot/restore round trip into
+	// the fresh one, not just that Restore runs.
+	if world.lastCreateChildContent != wantContent {
+		t.Fatalf("expected CreateChild to receive %+v, got %+v", wantContent, world.lastCreateChildContent)
+	}
 }
 
 // TestRestoreKeepsOldContentUntilRebuildSucceeds confirms the
@@ -202,7 +220,7 @@ func TestRestoreKeepsOldContentUntilRebuildSucceeds(t *testing.T) {
 
 	registry := noopRegistry(world)
 	registry.RegisterRebuildFunc("f", rebuildFn)
-	if err := registry.SetActiveRegion(rootID, "f", struct{}{}); err != nil {
+	if err := registry.SetActiveRegion(rootID, "f", struct{}{}, ContentLayout{}); err != nil {
 		t.Fatalf("SetActiveRegion: %v", err)
 	}
 
@@ -250,7 +268,7 @@ func TestRestoreFailedRebuildLeavesOldContentIntact(t *testing.T) {
 
 	registry := noopRegistry(world)
 	registry.RegisterRebuildFunc("f", rebuildFn)
-	if err := registry.SetActiveRegion(rootID, "f", struct{}{}); err != nil {
+	if err := registry.SetActiveRegion(rootID, "f", struct{}{}, ContentLayout{}); err != nil {
 		t.Fatalf("SetActiveRegion: %v", err)
 	}
 
@@ -283,7 +301,7 @@ func TestRestoreUnregisteredFuncIsHardError(t *testing.T) {
 
 	registry := noopRegistry(world)
 	registry.RegisterRebuildFunc("f", func(uint32, json.RawMessage) error { return nil })
-	if err := registry.SetActiveRegion(rootID, "f", struct{}{}); err != nil {
+	if err := registry.SetActiveRegion(rootID, "f", struct{}{}, ContentLayout{}); err != nil {
 		t.Fatalf("SetActiveRegion: %v", err)
 	}
 	snapshot, err := registry.Snapshot()
@@ -303,7 +321,7 @@ func TestRestoreUnregisteredFuncIsHardError(t *testing.T) {
 
 func TestRestoreEmptyDataIsNoop(t *testing.T) {
 	registry := NewRegistry(
-		func(uint32) (uint32, error) {
+		func(uint32, ContentLayout) (uint32, error) {
 			t.Fatal("CreateChild should never be called for empty data")
 			return 0, nil
 		},
@@ -332,7 +350,7 @@ func TestRestoreEmptyDataIsNoop(t *testing.T) {
 // SnapshotRegions's own generated output must not depend on it.
 func TestSnapshotIsSortedByParentID(t *testing.T) {
 	registry := NewRegistry(
-		func(uint32) (uint32, error) { return 0, nil },
+		func(uint32, ContentLayout) (uint32, error) { return 0, nil },
 		func(uint32, bool) error { return nil },
 		func(uint32) {},
 		func(uint32, uint32) error { return nil },
@@ -340,7 +358,7 @@ func TestSnapshotIsSortedByParentID(t *testing.T) {
 	registry.RegisterRebuildFunc("f", func(uint32, json.RawMessage) error { return nil })
 	// Registered out of order on purpose.
 	for _, id := range []uint32{30, 10, 20} {
-		if err := registry.SetActiveRegion(id, "f", struct{}{}); err != nil {
+		if err := registry.SetActiveRegion(id, "f", struct{}{}, ContentLayout{}); err != nil {
 			t.Fatalf("SetActiveRegion(%d): %v", id, err)
 		}
 	}
@@ -372,14 +390,14 @@ func TestSnapshotIsSortedByParentID(t *testing.T) {
 // silently-corrupted snapshot.
 func TestSetActiveRegionUsesSafeMarshal(t *testing.T) {
 	registry := NewRegistry(
-		func(uint32) (uint32, error) { return 0, nil },
+		func(uint32, ContentLayout) (uint32, error) { return 0, nil },
 		func(uint32, bool) error { return nil },
 		func(uint32) {},
 		func(uint32, uint32) error { return nil },
 	)
 	err := registry.SetActiveRegion(1, "f", struct {
 		Ratio float64 `json:"ratio"`
-	}{Ratio: math.NaN()})
+	}{Ratio: math.NaN()}, ContentLayout{})
 	if err == nil {
 		t.Fatal("expected an error for a NaN arg field, got nil")
 	}
