@@ -61,3 +61,10 @@ func (r RangeSlider) OnChange(handler func(min, max float32) error) {
 }
 
 func (r RangeSlider) Destroy() { internal.DestroyWidget(uint32(r)) }
+
+// WrapRangeSlider returns a typed handle for a host-assigned widget id the
+// guest didn't just create -- see widgets.WrapLabel's own doc comment for
+// the real use case and caveats.
+func WrapRangeSlider(id uint32) RangeSlider {
+	return RangeSlider(id)
+}

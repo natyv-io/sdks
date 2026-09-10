@@ -19,19 +19,22 @@ type Dialog struct {
 // containing an optional title, a message, and one Button per buttonLabels
 // entry in a right-aligned row. title == "" omits the title Label entirely.
 //
-// Escape closes the dialog silently (no OnResult callback -- see OnResult's
-// doc comment) -- wired here automatically, not left to the caller, so
-// every Dialog gets correct cancel-on-Escape behavior for free. A backdrop
-// click only blocks, never closes -- inherited from Modal itself, same as
-// every other Modal in this SDK.
-func CreateDialog(title, message string, buttonLabels []string) (Dialog, error) {
-	root, err := CreateContainer(Layout{
-		Sizing:    Sizing{Width: Fixed(280), Height: Fit()},
-		Padding:   Padding{Left: 16, Right: 16, Top: 16, Bottom: 16},
-		ChildGap:  12,
-		Direction: TopToBottom,
-		Modal:     true,
-	}, true, 0)
+// layout carries sizing/padding/gap (`.ntx`'s own codegen supplies today's
+// same 280x-Fit/16-pad/12-gap defaults when nothing overrides them) and,
+// crucially, any style resolved via `styles={...}` -- BackgroundColor/
+// CornerRadius/Border/Gradient/TextureID all flow straight through to the
+// real CreateContainer call below, since ApplyStyleToLayout (called by
+// generated code *before* CreateDialog, see that function's own doc
+// comment) mutates this same layout value pre-creation. Direction and
+// Modal are always forced regardless of what layout carries -- both are
+// load-bearing for what makes this a Dialog at all (vertical title/
+// message/button-row stacking, backdrop-blocking centered modal), not a
+// cosmetic default a caller should be able to override into something
+// that no longer reads as a dialog.
+func CreateDialog(layout Layout, title, message string, buttonLabels []string) (Dialog, error) {
+	layout.Direction = TopToBottom
+	layout.Modal = true
+	root, err := CreateContainer(layout, true, 0)
 	if err != nil {
 		return Dialog{}, err
 	}
@@ -119,4 +122,29 @@ func (d Dialog) OnResult(handler func(buttonLabel string) error) {
 			return handler(label)
 		})
 	}
+}
+
+// WrapDialog reconstructs a Dialog for a pre-existing root widget id and
+// its ordered button ids/labels -- see widgets.WrapMenu's own doc comment
+// for the general shape this serves. buttonIDs must be in the same order
+// buttonLabels were originally given to CreateDialog -- no host-side
+// "list this container's children" primitive exists to rediscover them,
+// same real constraint WrapMenuBar's own triggerIDs param has. Re-wires
+// root's own OnDismiss (the Escape/backdrop-click handler) directly,
+// matching CreateDialog's own behavior -- OnResult must still be called
+// separately afterward, same caller contract CreateDialog itself has.
+func WrapDialog(rootID uint32, buttonIDs []uint32, buttonLabels []string) Dialog {
+	d := Dialog{root: rootID}
+	for i, label := range buttonLabels {
+		if i >= len(buttonIDs) {
+			break
+		}
+		d.buttons = append(d.buttons, Button(buttonIDs[i]))
+		d.labels = append(d.labels, label)
+	}
+	Container(rootID).OnDismiss(func() error {
+		d.close()
+		return nil
+	})
+	return d
 }

@@ -98,3 +98,26 @@ func (mb *MenuBar) ID() uint32 { return uint32(mb.bar) }
 func (mb *MenuBar) Destroy() {
 	mb.bar.Destroy()
 }
+
+// WrapMenuBar reconstructs a *MenuBar for a pre-existing bar Container id
+// -- see widgets.WrapMenu's own doc comment for the general shape and
+// caveats this inherits. Real, necessary difference from WrapMenu itself:
+// there's no host-side "list this container's children" primitive, so a
+// bar's own per-item trigger ids can't be rediscovered from barID alone --
+// callers must separately persist and supply triggerIDs, in the same
+// order CreateMenuBar originally built them in (one per entries[i]).
+// entries must be the same list CreateMenuBar was originally given, same
+// "guest-side state, not host-side" reasoning as WrapMenu's own items
+// param. Any index beyond len(triggerIDs) is silently skipped rather than
+// erroring, matching this SDK's existing "best-effort over a hard
+// failure for state that's fundamentally guest-authored" posture.
+func WrapMenuBar(barID uint32, triggerIDs []uint32, entries []MenuBarEntry) *MenuBar {
+	mb := &MenuBar{bar: Container(barID)}
+	for i, entry := range entries {
+		if i >= len(triggerIDs) {
+			break
+		}
+		mb.menus = append(mb.menus, WrapMenu(triggerIDs[i], entry.Items))
+	}
+	return mb
+}

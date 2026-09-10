@@ -53,6 +53,26 @@ var regionRegistry = region.NewRegistry(
 	},
 )
 
+// Wires FlushPendingReveals into the real, central natyv_dispatch router --
+// see region.Registry.Restore/FlushPendingReveals' own doc comments for the
+// real finding this exists to work around. Safe as a package-level init():
+// regionRegistry's own var initializer (immediately above) is guaranteed to
+// have already run, and SetPostDispatchHook itself makes no host calls, only
+// setting a function value -- unlike a real host call from a var initializer
+// (which segfaults the whole process, confirmed empirically elsewhere in
+// this SDK), this is plain Go with no host interaction at all.
+func init() {
+	widgets.SetPostDispatchHook(func() {
+		// Best-effort, same posture as every other place in this SDK that
+		// can't surface a failure mid-dispatch without risking the real
+		// event itself (guest-side logging goes nowhere -- confirmed no
+		// Extism log drain exists host-side -- so there's nowhere useful to
+		// report a failure here even if dispatch could safely abort on one,
+		// which it shouldn't just because one region failed to reveal).
+		_ = regionRegistry.FlushPendingReveals()
+	})
+}
+
 // RegisterRebuildFunc names a function so a later natyv_resume can call it
 // again by name via RestoreRegions. Call this once, e.g. during
 // natyv_init -- registering the same name twice replaces the earlier
@@ -110,11 +130,14 @@ func SnapshotRegions() (json.RawMessage, error) {
 }
 
 // RestoreRegions rebuilds every region SnapshotRegions captured. Called
-// from natyv_resume. See region.Registry.Restore's own doc comment for
-// the full behavior (the make-before-break swap sequence, why an
-// unregistered function name is a hard error, why destroying every other
-// current child rather than just the ones this registry tracks is
-// deliberate).
+// from natyv_resume. Builds and stages each region's replacement content
+// (make-before-break -- the previous content stays fully visible and
+// intact the whole time) but deliberately does NOT reveal it yet -- see
+// region.Registry.Restore/FlushPendingReveals' own doc comments for the
+// full behavior and the real finding that makes the reveal step itself a
+// separate, deferred step now, why an unregistered function name is a
+// hard error, and why destroying every other current child rather than
+// just the ones this registry tracks is deliberate.
 func RestoreRegions(data json.RawMessage) error {
 	return regionRegistry.Restore(data)
 }

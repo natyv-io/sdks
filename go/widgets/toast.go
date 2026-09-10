@@ -16,13 +16,21 @@ type ToastStack struct {
 // create once, reuse for every toast shown afterward via Show. Unlike every
 // on-demand floating panel elsewhere in this SDK, the stack itself is never
 // destroyed/recreated -- only the individual toasts inside it come and go.
-func CreateToastStack(childGap uint16) (*ToastStack, error) {
-	c, err := CreateContainer(Layout{
-		Sizing:    Sizing{Width: Fit(), Height: Fit()},
-		ChildGap:  childGap,
-		Direction: TopToBottom,
-		Toast:     true,
-	}, false, 0)
+//
+// layout carries any style resolved via `styles={...}` (BackgroundColor/
+// CornerRadius/etc, see CreateDialog's identical doc comment for why this
+// flows through pre-creation) -- childGap stays its own explicit param
+// (not folded into layout) since it's required config, not an optional
+// style, matching AccordionSection's `background bool`/Table's `rowHeight`
+// precedent. Sizing/Direction/Toast are always forced: Fit/Fit + top-to-
+// bottom stacking + Toast-anchoring are what make this a toast stack at
+// all, not a cosmetic default.
+func CreateToastStack(layout Layout, childGap uint16) (*ToastStack, error) {
+	layout.Sizing = Sizing{Width: Fit(), Height: Fit()}
+	layout.Direction = TopToBottom
+	layout.Toast = true
+	layout.ChildGap = childGap
+	c, err := CreateContainer(layout, false, 0)
 	if err != nil {
 		return nil, err
 	}

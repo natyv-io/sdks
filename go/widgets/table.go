@@ -298,6 +298,17 @@ func (t *Table) sortBy(col int) error {
 	})
 	t.selected = -1
 
+	if err := t.updateHeaderLabels(); err != nil {
+		return err
+	}
+	return t.render(t.lastScrollOffsetY)
+}
+
+// updateHeaderLabels relabels every header button from t.columns/t.sortCol/
+// t.sortAsc -- split out of sortBy so WrapTable can reuse it to restore the
+// sort-arrow marker on reattach, without duplicating the label-building
+// logic.
+func (t *Table) updateHeaderLabels() error {
 	for i, btn := range t.headerBtns {
 		label := t.columns[i].Header
 		if i == t.sortCol {
@@ -311,7 +322,7 @@ func (t *Table) sortBy(col int) error {
 			return err
 		}
 	}
-	return t.render(t.lastScrollOffsetY)
+	return nil
 }
 
 // ID is the widget id `.ntx`'s own `styles={...}`/`ref={...}` codegen
@@ -325,4 +336,91 @@ func (t *Table) ID() uint32 { return uint32(t.wrapper) }
 // during a failed CreateTable (Destroy on a zero-value handle is a no-op).
 func (t *Table) Destroy() {
 	t.wrapper.Destroy()
+}
+
+// TableSnapshot carries every real widget id a Table owns beyond its own
+// wrapper -- see WrapTable's own doc comment for why these must be
+// supplied explicitly. RowPool/CellPool must be in the exact same order
+// CreateTable itself built them in (CellPool[k] is RowPool[k]'s own
+// len(columns) cells, in column order) -- there's no host-side "list this
+// container's children" primitive to rediscover them, same real
+// constraint WrapMenuBar/WrapDialog/WrapBreadcrumbs already have.
+type TableSnapshot struct {
+	Header       uint32
+	HeaderBtns   []uint32
+	Viewport     uint32
+	TopSpacer    uint32
+	BottomSpacer uint32
+	RowPool      []uint32
+	CellPool     [][]uint32
+}
+
+// WrapTable reconstructs a *Table for a pre-existing wrapper widget id and
+// the rest of its real widget ids (see TableSnapshot). Real, necessary
+// difference from every other WrapX in this file: Table's entire pool
+// (header/headerBtns/viewport/spacers/every row/every cell) is a
+// permanent, never-destroyed set of real widgets for the table's whole
+// lifetime (see this file's own type doc comment) -- unlike Menu/
+// Combobox/DateTimePicker, where everything but the trigger is lazily
+// created and destroyed, so there's no small "just the trigger" case
+// here to lean on.
+//
+// columns/rows/rowHeight/viewportHeight must be the same values
+// CreateTable was originally given (rows should reflect whatever order
+// it was last sorted into, if the caller wants that to survive -- sortCol/
+// sortAsc are for the header's own "^"/"v" label marker only, they don't
+// re-sort rows themselves). scrollOffsetY lets a caller restore the prior
+// scroll position; pass 0 to just reset to the top, matching CreateTable's
+// own initial render(0) call.
+//
+// Ends by calling render(scrollOffsetY) -- the same function CreateTable
+// itself calls to populate the pool initially, and the *only* place any
+// row's own OnClick gets registered at all (see render's own doc
+// comment) -- so this one call is what actually reattaches every visible
+// row's click handler, not a separate mechanism.
+func WrapTable(wrapperID uint32, snap TableSnapshot, columns []Column, rows [][]string, rowHeight, viewportHeight, scrollOffsetY float32, sortCol int, sortAsc bool) (*Table, error) {
+	t := &Table{
+		wrapper:        Container(wrapperID),
+		header:         Container(snap.Header),
+		viewport:       Container(snap.Viewport),
+		viewportHeight: viewportHeight,
+		columns:        columns,
+		rows:           rows,
+		rowHeight:      rowHeight,
+		selected:       -1,
+		sortCol:        sortCol,
+		sortAsc:        sortAsc,
+		topSpacer:      Container(snap.TopSpacer),
+		bottomSpacer:   Container(snap.BottomSpacer),
+	}
+
+	t.headerBtns = make([]Button, len(snap.HeaderBtns))
+	for i, id := range snap.HeaderBtns {
+		btn := WrapButton(id)
+		colIdx := i
+		btn.OnClick(func() error { return t.sortBy(colIdx) })
+		t.headerBtns[i] = btn
+	}
+	if err := t.updateHeaderLabels(); err != nil {
+		return nil, err
+	}
+
+	t.rowPool = make([]Button, len(snap.RowPool))
+	t.cellPool = make([][]Label, len(snap.RowPool))
+	for k, id := range snap.RowPool {
+		t.rowPool[k] = WrapButton(id)
+		cells := make([]Label, len(snap.CellPool[k]))
+		for c, cellID := range snap.CellPool[k] {
+			cells[c] = WrapLabel(cellID)
+		}
+		t.cellPool[k] = cells
+	}
+
+	internal.RegisterScroll(uint32(t.viewport), func(_, offsetY float32) error {
+		return t.onScroll(offsetY)
+	})
+	if err := t.render(scrollOffsetY); err != nil {
+		return nil, err
+	}
+	return t, nil
 }

@@ -388,3 +388,43 @@ func (m *Menu) ID() uint32 { return uint32(m.trigger) }
 func (m *Menu) Destroy() {
 	m.trigger.Destroy()
 }
+
+// WrapMenu reconstructs a *Menu for a pre-existing trigger widget id --
+// see widgets.WrapLabel's own doc comment for the general use case this
+// serves. Real, necessary difference from every other WrapX in this SDK:
+// Menu carries real state beyond its own widget id (entries, the items
+// list CreateMenu was originally given) that lives only in guest memory,
+// not host-side -- callers must supply the same items list CreateMenu
+// was originally given, or a reopened menu shows the wrong content.
+// Reconstructs Menu's own real resting-state defaults (highlighted/
+// subOpenIndex/subHighlighted == -1, panel/items/subPanel/subItems ==
+// zero value) -- correct for the overwhelmingly common case (the panel
+// is only ever created on Open() and destroyed on Close(), so it's
+// virtually always closed at rest).
+//
+// Real, accepted limitation: if the dropdown panel happened to be open
+// at the exact moment of a recycle, this reattaches assuming it's closed
+// -- the real, now-orphaned panel/items stay on screen but become
+// permanently inert (their own OnClick handlers are gone, nothing
+// recreates or re-registers them). A later click on the trigger itself
+// still works correctly (Open() checks m.panel == 0, so it believes it's
+// closed and builds a fresh one) -- only the stale already-open panel is
+// affected, and only for the narrow window where a recycle happens to
+// land while it's open.
+func WrapMenu(triggerID uint32, items []MenuItem) *Menu {
+	trigger := Button(triggerID)
+	m := &Menu{
+		trigger:        trigger,
+		entries:        items,
+		highlighted:    -1,
+		subOpenIndex:   -1,
+		subHighlighted: -1,
+	}
+	// Same wiring CreateMenu itself does -- real, necessary here too:
+	// without it the trigger has no reattached OnClick/OnBlur/OnKeyNav at
+	// all post-recycle.
+	trigger.OnClick(m.onTriggerClick)
+	trigger.OnBlur(m.onTriggerBlur)
+	trigger.OnKeyNav(m.onTriggerKeyNav)
+	return m
+}

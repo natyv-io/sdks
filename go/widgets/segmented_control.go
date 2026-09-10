@@ -44,3 +44,10 @@ func (sc SegmentedControl) OnChange(handler func(index int) error) {
 	internal.RegisterChange(uint32(sc), func(v float32) error { return handler(int(v)) })
 }
 func (sc SegmentedControl) Destroy() { internal.DestroyWidget(uint32(sc)) }
+
+// WrapSegmentedControl returns a typed handle for a host-assigned widget
+// id the guest didn't just create -- see widgets.WrapLabel's own doc
+// comment for the real use case and caveats.
+func WrapSegmentedControl(id uint32) SegmentedControl {
+	return SegmentedControl(id)
+}

@@ -12,15 +12,28 @@ import (
 // -- this is the type `natyv prepare`'s codegen (src/styling/Codegen.zig)
 // emits literal values into, so its name is the one guest code actually
 // writes/reads.
+//
+// JSON tags exist so ApplyStyleToLayout can embed this directly into a
+// Layout and let json.Marshal(layout) serialize it correctly on the wire
+// (matching WidgetHostFunctions.zig's ColorRequest field names) --
+// applyMergedStyle's own conversion to internal.ColorValue (used by the
+// separate ApplyStyle(id, ...) path) never went through these tags at all,
+// so adding them changes nothing about that existing path.
 type Color struct {
-	R, G, B, A float32
+	R float32 `json:"r"`
+	G float32 `json:"g"`
+	B float32 `json:"b"`
+	A float32 `json:"a"`
 }
 
 // CornerRadius is one style token's resolved per-corner radius -- named
 // fields (not a bare [4]float32) for the same readability reason Padding
 // uses Left/Right/Top/Bottom instead of a raw array. Order is TL/TR/BR/BL,
 // matching the stylesheet's real CSS-clockwise convention
-// (src/styling/Resolver.zig).
+// (src/styling/Resolver.zig). No JSON tags of its own -- the wire shape for
+// corner radius is always a raw [4]float32 (see SetStyleRequest.corner_radius
+// and Layout.CornerRadius), never a named object, so this type is only ever
+// converted positionally, both here and in applyMergedStyle.
 type CornerRadius struct {
 	TopLeft, TopRight, BottomRight, BottomLeft float32
 }
@@ -29,10 +42,10 @@ type CornerRadius struct {
 // both present together (Resolver.zig requires both when a `border` block
 // is used at all), so Color is a plain value here, not a pointer like
 // ResolvedStyle's own BackgroundColor (whose absence is meaningful on its
-// own).
+// own). JSON tags: see Color's own doc comment.
 type Border struct {
-	Width float32
-	Color Color
+	Width float32 `json:"width"`
+	Color Color   `json:"color"`
 }
 
 // Gradient is one style token's resolved linear gradient. StartPos/EndPos
@@ -40,12 +53,13 @@ type Border struct {
 // codegen bakes the stylesheet's named anchor (`topLeft`, etc.) into this
 // plain coordinate at prepare time (Codegen.zig's own `anchorUV`), the
 // same way a hex color is baked into floats, so nothing guest-facing here
-// needs to know the anchor vocabulary exists.
+// needs to know the anchor vocabulary exists. JSON tags: see Color's own
+// doc comment.
 type Gradient struct {
-	StartPos   [2]float32
-	StartColor Color
-	EndPos     [2]float32
-	EndColor   Color
+	StartPos   [2]float32 `json:"start_pos"`
+	StartColor Color      `json:"start_color"`
+	EndPos     [2]float32 `json:"end_pos"`
+	EndColor   Color      `json:"end_color"`
 }
 
 // ResolvedStyle is one style token's resolved property values, exactly the
@@ -146,6 +160,70 @@ func ApplyStyleWithTexture(widgetID uint32, tokens map[string]ResolvedStyle, tex
 	}
 	merged.TextureID = &textureID
 	return applyMergedStyle(widgetID, merged)
+}
+
+// ApplyStyleToLayout resolves tokenNames exactly like ApplyStyle, but
+// writes the result directly into layout instead of making a separate,
+// later host call against an already-created widget's id -- call this
+// BEFORE the matching CreateX(layout, ...) call, not after. Real bug this
+// exists to close (found live 2026-09-09, mail-natyv's own real click-
+// through -- see WidgetHostFunctions.zig's ClayLayoutRequest doc comment
+// and project_natyv_render_loop_fix memory for the full finding):
+// CreateX and the separate ApplyStyle(id, ...) call are two entirely
+// independently-locked host calls, leaving a real window where a freshly
+// created widget exists with no visual style at all -- long enough for an
+// unrelated main-thread redraw (any real SDL event, not just a click) to
+// render it that way. Embedding the resolved style directly into the same
+// create request closes the gap outright, since the host applies both
+// under the one lock that inserts the widget.
+//
+// ApplyStyle(id, ...) remains real and correct for genuinely restyling an
+// already-existing widget later (a runtime state change) -- this doesn't
+// replace it, it's the atomic alternative for the create-time case, which
+// `natyv prepare`'s own codegen should prefer whenever a widget's full
+// style is already known before it's created (the overwhelming majority
+// of real `.ntx` markup).
+//
+// A resolved Padding (if any) is written directly into layout.Padding,
+// overwriting whatever the caller already set there -- the same later-
+// wins precedence ApplyStyle(id, ...) already has today (setStyle
+// unconditionally overwrites), just resolved before creation instead of
+// after.
+func ApplyStyleToLayout(layout *Layout, tokens map[string]ResolvedStyle, tokenNames ...string) error {
+	merged, err := resolveTokenNames(tokens, tokenNames)
+	if err != nil {
+		return err
+	}
+	mergeStyleIntoLayout(layout, merged)
+	return nil
+}
+
+// ApplyStyleToLayoutWithTexture mirrors ApplyStyleWithTexture -- src's own
+// resolved asset id always wins over whatever texture (if any) the named
+// tokens themselves carry. See ApplyStyleToLayout's own doc comment for
+// why this exists at all.
+func ApplyStyleToLayoutWithTexture(layout *Layout, tokens map[string]ResolvedStyle, textureID uint32, tokenNames ...string) error {
+	merged, err := resolveTokenNames(tokens, tokenNames)
+	if err != nil {
+		return err
+	}
+	merged.TextureID = &textureID
+	mergeStyleIntoLayout(layout, merged)
+	return nil
+}
+
+func mergeStyleIntoLayout(layout *Layout, merged ResolvedStyle) {
+	if merged.Padding != nil {
+		layout.Padding = *merged.Padding
+	}
+	layout.BackgroundColor = merged.BackgroundColor
+	if merged.CornerRadius != nil {
+		cr := merged.CornerRadius
+		layout.CornerRadius = &[4]float32{cr.TopLeft, cr.TopRight, cr.BottomRight, cr.BottomLeft}
+	}
+	layout.Border = merged.Border
+	layout.Gradient = merged.Gradient
+	layout.TextureID = merged.TextureID
 }
 
 func resolveTokenNames(tokens map[string]ResolvedStyle, tokenNames []string) (ResolvedStyle, error) {

@@ -76,3 +76,12 @@ func (b Button) SetVisible(visible bool) error { return internal.SetVisible(uint
 func (b Button) SetEnabled(enabled bool) error { return internal.SetEnabled(uint32(b), enabled) }
 
 func (b Button) Destroy() { internal.DestroyWidget(uint32(b)) }
+
+// WrapButton returns a typed handle for a host-assigned widget id the guest
+// didn't just create -- see widgets.WrapLabel's own doc comment for the
+// real use case (natyv_resume reattaching to a pre-existing on-screen
+// widget instead of recreating it) and caveats (no host-side validation,
+// fails with the host's own "no such widget" error if id isn't alive).
+func WrapButton(id uint32) Button {
+	return Button(id)
+}

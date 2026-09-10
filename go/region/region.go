@@ -132,6 +132,18 @@ type Registry struct {
 	// calling it again from a normal in-app rebuild already means: "here's
 	// the new current recipe for this region."
 	activeRegions map[uint32]ActiveRegion
+
+	// pendingReveals holds regions Restore has already built (as a hidden
+	// staging child) but not yet revealed -- see Restore's own doc comment
+	// on why the reveal is deferred rather than performed immediately, and
+	// FlushPendingReveals for where it actually happens.
+	pendingReveals []pendingReveal
+}
+
+// pendingReveal is one region built by Restore, awaiting FlushPendingReveals.
+type pendingReveal struct {
+	ParentID  uint32
+	StagingID uint32
 }
 
 // NewRegistry constructs an empty Registry over the four real widget
@@ -214,13 +226,21 @@ func (r *Registry) Snapshot() (json.RawMessage, error) {
 // make-before-break swap so the region's previous content stays fully
 // visible and intact for the entire time its replacement is being built:
 // for each region, a new hidden child of its stable parent is created
-// first, the registered rebuild function builds the replacement into
-// *that* (not the real parent directly), and only once it returns
-// successfully is the new subtree revealed and the previous one destroyed.
-// A rebuild function that fails leaves the previous content completely
-// untouched -- only the incomplete staging subtree is cleaned up -- rather
-// than today's alternative of a destroy-first sequence leaving the parent
-// empty on any failure.
+// first, and the registered rebuild function builds the replacement into
+// *that* (not the real parent directly). A rebuild function that fails
+// leaves the previous content completely untouched -- only the incomplete
+// staging subtree is cleaned up -- rather than a destroy-first sequence
+// leaving the parent empty on any failure.
+//
+// The reveal itself (showing the new subtree, destroying the old one) is
+// deliberately deferred, not performed here -- see FlushPendingReveals'
+// own doc comment for the real, live-confirmed finding this exists to work
+// around: a widget created while still inside the same natyv_resume call
+// that built it can render with no visible style, but the exact same
+// content, revealed from a genuinely separate, later call, renders
+// correctly. Restore only ever builds and stages; every region it builds
+// is queued in pendingReveals for FlushPendingReveals to actually reveal,
+// on whatever real dispatch happens to come in next.
 //
 // The rebuild function is expected to redo whatever bookkeeping (including
 // its own SetActiveRegion call) a normal rebuild already does -- Restore
@@ -230,17 +250,6 @@ func (r *Registry) Snapshot() (json.RawMessage, error) {
 // (re-)registered by the time this runs is a real, reportable error, not a
 // silent skip -- natyv_resume is responsible for calling
 // RegisterRebuildFunc for everything it might need before calling this.
-//
-// DestroyChildrenExcept destroying *every* other current child of a
-// region's parent -- not just the ones this Registry happens to know
-// about -- is deliberate, not a gap: nothing outside a region's own
-// registered recipe ever holds a standalone, independently-persisted
-// reference into that region's contents, so anything else a parent
-// happened to be caching-but-not-showing (a previously viewed folder kept
-// alive for instant back-navigation, say) is a descendant of the same
-// stable parent and gets destroyed along with everything else, correctly
-// -- the framework was never tracking those entries, and the app's own
-// existing cold-cache-miss path already handles rebuilding one on demand.
 func (r *Registry) Restore(data json.RawMessage) error {
 	if len(data) == 0 {
 		return nil
@@ -262,12 +271,54 @@ func (r *Registry) Restore(data json.RawMessage) error {
 			r.DestroyWidget(staging)
 			return err
 		}
-		if err := r.SetVisible(staging, true); err != nil {
-			return err
-		}
-		if err := r.DestroyChildrenExcept(region.ParentID, staging); err != nil {
-			return err
-		}
+		r.pendingReveals = append(r.pendingReveals, pendingReveal{ParentID: region.ParentID, StagingID: staging})
 	}
 	return nil
+}
+
+// FlushPendingReveals performs the reveal step Restore itself deliberately
+// defers -- see Restore's own doc comment for why. Wired (see ../region.go)
+// to run automatically at the very start of the real, central natyv_dispatch
+// router, so it fires on whatever real event happens to arrive next after a
+// resume, without needing the app or the host to know or care what that
+// event actually is. A no-op, cheaply, when nothing is pending -- safe to
+// call on every single dispatch, not just ones following a resume.
+//
+// DestroyChildrenExcept destroying *every* other current child of a
+// region's parent -- not just the ones this Registry happens to know
+// about -- is deliberate, not a gap: nothing outside a region's own
+// registered recipe ever holds a standalone, independently-persisted
+// reference into that region's contents, so anything else a parent
+// happened to be caching-but-not-showing (a previously viewed folder kept
+// alive for instant back-navigation, say) is a descendant of the same
+// stable parent and gets destroyed along with everything else, correctly
+// -- the framework was never tracking those entries, and the app's own
+// existing cold-cache-miss path already handles rebuilding one on demand.
+//
+// Continues past a single region's own failure rather than aborting the
+// whole flush -- one broken region revealing late is far better than every
+// other already-correctly-built region staying permanently hidden because
+// of it. Returns the first error encountered, if any, after attempting
+// every pending reveal.
+func (r *Registry) FlushPendingReveals() error {
+	if len(r.pendingReveals) == 0 {
+		return nil
+	}
+	pending := r.pendingReveals
+	r.pendingReveals = nil
+	var firstErr error
+	for _, p := range pending {
+		if err := r.SetVisible(p.StagingID, true); err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		if err := r.DestroyChildrenExcept(p.ParentID, p.StagingID); err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+		}
+	}
+	return firstErr
 }

@@ -65,3 +65,10 @@ func (n NumericStepper) OnBlur(handler func(newFocusID uint32) error) {
 }
 
 func (n NumericStepper) Destroy() { internal.DestroyWidget(uint32(n)) }
+
+// WrapNumericStepper returns a typed handle for a host-assigned widget id
+// the guest didn't just create -- see widgets.WrapLabel's own doc comment
+// for the real use case and caveats.
+func WrapNumericStepper(id uint32) NumericStepper {
+	return NumericStepper(id)
+}

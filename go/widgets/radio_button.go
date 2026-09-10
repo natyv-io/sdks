@@ -39,3 +39,10 @@ func (r RadioButton) Checked() (bool, error)       { return internal.GetChecked(
 func (r RadioButton) Select() error                { return internal.SetChecked(uint32(r), true) }
 func (r RadioButton) OnClick(handler func() error) { internal.RegisterClick(uint32(r), handler) }
 func (r RadioButton) Destroy()                     { internal.DestroyWidget(uint32(r)) }
+
+// WrapRadioButton returns a typed handle for a host-assigned widget id the
+// guest didn't just create -- see widgets.WrapLabel's own doc comment for
+// the real use case and caveats.
+func WrapRadioButton(id uint32) RadioButton {
+	return RadioButton(id)
+}

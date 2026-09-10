@@ -191,3 +191,24 @@ func (c *Combobox) ID() uint32 { return uint32(c.field) }
 func (c *Combobox) Destroy() {
 	c.field.Destroy()
 }
+
+// WrapCombobox reconstructs a *Combobox for a pre-existing TextField
+// widget id -- mirrors CreateCombobox's own wiring exactly (field
+// OnChange/OnBlur/OnKeyNav), just via WrapTextField instead of
+// CreateTextField. See WrapMenu's own doc comment for the general shape
+// and caveats this inherits: options must be the same list
+// CreateCombobox was originally given, and a panel that happened to be
+// open at recycle time is left orphaned (a later keystroke still
+// rebuilds it correctly, since render() always destroys-then-rebuilds
+// from scratch regardless of prior state).
+func WrapCombobox(fieldID uint32, options []string) *Combobox {
+	field := WrapTextField(fieldID)
+	c := &Combobox{field: field, options: options, highlighted: -1}
+	field.OnChange(func(text string) error {
+		c.highlighted = -1
+		return c.render(text)
+	})
+	field.OnBlur(func(uint32) error { return c.close() })
+	field.OnKeyNav(c.onKeyNav)
+	return c
+}

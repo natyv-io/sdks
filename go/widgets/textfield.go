@@ -55,3 +55,10 @@ func (t TextField) OnBlur(handler func(newFocusID uint32) error) {
 func (t TextField) OnKeyNav(handler func(key string) error) {
 	internal.RegisterKeyNav(uint32(t), handler)
 }
+
+// WrapTextField returns a typed handle for a host-assigned widget id the
+// guest didn't just create -- see widgets.WrapLabel's own doc comment for
+// the real use case and caveats.
+func WrapTextField(id uint32) TextField {
+	return TextField(id)
+}

@@ -137,6 +137,18 @@ type Layout struct {
 	// durationMs param), stacking via ordinary flex layout, not their own
 	// Toast flag.
 	Toast bool `json:"toast"`
+	// The five fields below let a widget be created with its visual style
+	// already fully resolved, in the same wire request as its creation --
+	// set them via ApplyStyleToLayout (or ApplyStyleToLayoutWithTexture),
+	// never by hand; see ApplyStyleToLayout's own doc comment in style.go
+	// for the real, live-caught race this exists to close. nil/omitted
+	// means "no style resolved for this property," the same convention
+	// every other optional field on this struct already uses.
+	BackgroundColor *Color      `json:"background_color,omitempty"`
+	CornerRadius    *[4]float32 `json:"corner_radius,omitempty"`
+	Border          *Border     `json:"border,omitempty"`
+	Gradient        *Gradient   `json:"gradient,omitempty"`
+	TextureID       *uint32     `json:"texture,omitempty"`
 }
 
 // ParentID builds a Layout whose ParentID points at an existing widget --

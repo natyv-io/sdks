@@ -80,3 +80,12 @@ func (t Tabs) OnChange(handler func(index int) error) {
 // (see CreateTabPanel's own doc comment), so a single destroy call
 // cascades through all of them.
 func (t Tabs) Destroy() { internal.DestroyWidget(uint32(t)) }
+
+// WrapTabs returns a typed handle for a host-assigned widget id the guest
+// didn't just create -- see widgets.WrapLabel's own doc comment for the
+// real use case and caveats. Only reattaches OnChange -- CreateTabPanel's
+// own already-built panels survive host-side regardless, same as every
+// other widget's real content.
+func WrapTabs(id uint32) Tabs {
+	return Tabs(id)
+}

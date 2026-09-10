@@ -40,3 +40,10 @@ func (s Slider) OnChange(handler func(value float32) error) {
 	internal.RegisterChange(uint32(s), handler)
 }
 func (s Slider) Destroy() { internal.DestroyWidget(uint32(s)) }
+
+// WrapSlider returns a typed handle for a host-assigned widget id the
+// guest didn't just create -- see widgets.WrapLabel's own doc comment for
+// the real use case and caveats.
+func WrapSlider(id uint32) Slider {
+	return Slider(id)
+}

@@ -51,3 +51,10 @@ func (t TextArea) OnChange(handler func(text string) error) {
 func (t TextArea) OnBlur(handler func(newFocusID uint32) error) {
 	internal.RegisterBlur(uint32(t), handler)
 }
+
+// WrapTextArea returns a typed handle for a host-assigned widget id the
+// guest didn't just create -- see widgets.WrapLabel's own doc comment for
+// the real use case and caveats.
+func WrapTextArea(id uint32) TextArea {
+	return TextArea(id)
+}

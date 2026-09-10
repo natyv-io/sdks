@@ -98,3 +98,10 @@ func (c Container) DestroyChildren() error { return internal.DestroyChildren(uin
 func (c Container) DestroyChildrenExcept(except Container) error {
 	return internal.DestroyChildrenExcept(uint32(c), uint32(except))
 }
+
+// WrapContainer returns a typed handle for a host-assigned widget id the
+// guest didn't just create -- see widgets.WrapLabel's own doc comment for
+// the real use case and caveats.
+func WrapContainer(id uint32) Container {
+	return Container(id)
+}

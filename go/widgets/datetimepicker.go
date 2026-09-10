@@ -413,3 +413,27 @@ func (p *DateTimePicker) ID() uint32 { return uint32(p.trigger) }
 func (p *DateTimePicker) Destroy() {
 	p.trigger.Destroy()
 }
+
+// WrapDateTimePicker reconstructs a *DateTimePicker for a pre-existing
+// trigger widget id -- mirrors CreateDateTimePicker's own wiring exactly
+// (trigger OnClick/OnBlur), just via WrapButton instead of CreateButton.
+// See WrapMenu's own doc comment for the general shape and caveats this
+// inherits, plus one specific to this type: year/month/hour/minute are
+// live, mutable state (shiftMonth/the hour/minute steppers change them
+// as the user interacts), not a fixed creation-time shape like Menu's own
+// entries -- callers that want the exact in-progress values to survive a
+// recycle are responsible for tracking and persisting them themselves,
+// same as any other live app state; this only ever seeds whatever values
+// it's given, the same way CreateDateTimePicker's own params do.
+func WrapDateTimePicker(triggerID uint32, year, month, hour, minute int) *DateTimePicker {
+	trigger := WrapButton(triggerID)
+	p := &DateTimePicker{trigger: trigger, year: year, month: month, hour: hour, minute: minute}
+	trigger.OnClick(func() error {
+		if p.panel == 0 {
+			return p.open()
+		}
+		return nil
+	})
+	trigger.OnBlur(p.onBlur)
+	return p
+}

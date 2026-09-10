@@ -316,3 +316,63 @@ func (t *Tree) ID() uint32 { return uint32(t.viewport) }
 func (t *Tree) Destroy() {
 	t.viewport.Destroy()
 }
+
+// TreeSnapshot carries every real widget id a Tree owns beyond its own
+// viewport -- see WrapTree's own doc comment for why these must be
+// supplied explicitly. RowPool must be in the exact same order CreateTree
+// itself built it in -- there's no host-side "list this container's
+// children" primitive to rediscover it, same real constraint
+// TableSnapshot's own RowPool has.
+type TreeSnapshot struct {
+	TopSpacer    uint32
+	BottomSpacer uint32
+	RowPool      []uint32
+}
+
+// WrapTree reconstructs a *Tree for a pre-existing viewport widget id and
+// the rest of its real widget ids (see TreeSnapshot) -- same "permanent
+// pool, not a lazily-created/destroyed panel" reasoning as WrapTable's
+// own doc comment (see that function for the fuller explanation, shared
+// by both since Tree's own doc comment says Table reuses this exact
+// virtualization technique directly).
+//
+// roots/rowHeight/viewportHeight must be the same values CreateTree was
+// originally given -- roots carries each node's own live Expanded state,
+// so a caller that wants expand/collapse state to survive a recycle is
+// responsible for persisting and restoring the whole roots tree itself
+// (guest-side data, not host-side, same reasoning as Menu's own entries
+// param). selected is deliberately not a param -- it resets to nil here
+// (no node selected), the same way Table's own selected already resets
+// on every sort in the original, non-recycling code: it's used only for
+// the "*" cosmetic marker, and plumbing a "which node was selected"
+// identifier through would be disproportionate to what's lost. scrollOffsetY
+// lets a caller restore the prior scroll position; pass 0 to reset to the
+// top, matching CreateTree's own initial render(0) call.
+//
+// Ends by calling render(scrollOffsetY) -- the same function CreateTree
+// itself calls to populate the pool initially, and the only place any
+// row's own OnClick gets registered (see render's own doc comment) -- so
+// this one call is what actually reattaches every visible row's click
+// handler.
+func WrapTree(viewportID uint32, snap TreeSnapshot, roots []*TreeNode, rowHeight, viewportHeight, scrollOffsetY float32) (*Tree, error) {
+	t := &Tree{
+		viewport:       Container(viewportID),
+		viewportHeight: viewportHeight,
+		roots:          roots,
+		rowHeight:      rowHeight,
+		topSpacer:      Container(snap.TopSpacer),
+		bottomSpacer:   Container(snap.BottomSpacer),
+	}
+	t.rowPool = make([]Button, len(snap.RowPool))
+	for k, id := range snap.RowPool {
+		t.rowPool[k] = WrapButton(id)
+	}
+
+	internal.RegisterScroll(uint32(t.viewport), func(_, offsetY float32) error {
+		return t.onScroll(offsetY)
+	})
+	if err := t.render(scrollOffsetY); err != nil {
+		return nil, err
+	}
+	return t, nil
+}

@@ -88,3 +88,12 @@ func (w Window) Close() error {
 	}
 	return nil
 }
+
+// WrapWindow returns a typed handle for a host-assigned widget id the
+// guest didn't just create -- see widgets.WrapLabel's own doc comment for
+// the real use case and caveats. Only meaningful for OnCloseRequested --
+// the real SDL_Window/SDL_Renderer/child widgets all survive a recycle
+// host-side regardless, same as everything else this mechanism covers.
+func WrapWindow(id uint32) Window {
+	return Window(id)
+}

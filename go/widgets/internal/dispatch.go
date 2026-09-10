@@ -133,6 +133,18 @@ func RegisterWindowCloseRequested(id uint32, handler func() error) {
 	windowCloseRequestedHandlers[id] = handler
 }
 
+// PostDispatchHook, if set, is called at the very start of every real
+// natyv_dispatch call, before the event itself is handled. Exported so the
+// sibling `widgets` package (the only thing outside this `internal` package
+// allowed to import it) can wire it to a real function without this file
+// needing to know anything about regions/resume -- see widgets.
+// SetPostDispatchHook and region.Registry.FlushPendingReveals' own doc
+// comments for why this exists: a widget revealed from a genuinely
+// separate, later dispatch renders correctly even when the exact same
+// content revealed from inside natyv_resume itself does not. nil by
+// default -- an app that never uses rebuildable regions pays nothing.
+var PostDispatchHook func()
+
 type dispatchEvent struct {
 	WidgetID  uint32 `json:"widget_id"`
 	EventType string `json:"event_type"`
@@ -191,6 +203,10 @@ type fileSelectedPayload struct {
 //
 //go:wasmexport natyv_dispatch
 func natyvDispatchExport() int32 {
+	if PostDispatchHook != nil {
+		PostDispatchHook()
+	}
+
 	var event dispatchEvent
 	if err := pdk.InputJSON(&event); err != nil {
 		pdk.SetErrorString(err.Error())

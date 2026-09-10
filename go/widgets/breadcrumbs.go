@@ -133,3 +133,19 @@ func (b Breadcrumbs) ID() uint32 { return b.root }
 func (b Breadcrumbs) Destroy() {
 	Container(b.root).Destroy()
 }
+
+// WrapBreadcrumbs reconstructs a Breadcrumbs for a pre-existing root
+// widget id and its ordered clickable-crumb button ids (the final,
+// non-clickable crumb has no button at all -- see CreateBreadcrumbs' own
+// "last" branch -- so buttonIDs has one fewer entry than the original
+// crumbs list). Same real constraint as WrapMenuBar/WrapDialog's own
+// ordered-id params: no host-side "list children" primitive exists to
+// rediscover them. OnCrumbClick must still be called separately
+// afterward, same caller contract CreateBreadcrumbs itself has.
+func WrapBreadcrumbs(rootID uint32, buttonIDs []uint32) Breadcrumbs {
+	b := Breadcrumbs{root: rootID}
+	for _, id := range buttonIDs {
+		b.buttons = append(b.buttons, Button(id))
+	}
+	return b
+}

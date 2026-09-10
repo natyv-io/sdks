@@ -39,3 +39,10 @@ func (tg Toggle) Checked() (bool, error)        { return internal.GetChecked(uin
 func (tg Toggle) SetChecked(checked bool) error { return internal.SetChecked(uint32(tg), checked) }
 func (tg Toggle) OnClick(handler func() error)  { internal.RegisterClick(uint32(tg), handler) }
 func (tg Toggle) Destroy()                      { internal.DestroyWidget(uint32(tg)) }
+
+// WrapToggle returns a typed handle for a host-assigned widget id the
+// guest didn't just create -- see widgets.WrapLabel's own doc comment for
+// the real use case and caveats.
+func WrapToggle(id uint32) Toggle {
+	return Toggle(id)
+}

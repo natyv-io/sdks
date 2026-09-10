@@ -43,3 +43,10 @@ func (cb Checkbox) OnBlur(handler func(newFocusID uint32) error) {
 }
 
 func (cb Checkbox) Destroy() { internal.DestroyWidget(uint32(cb)) }
+
+// WrapCheckbox returns a typed handle for a host-assigned widget id the
+// guest didn't just create -- see widgets.WrapLabel's own doc comment for
+// the real use case and caveats.
+func WrapCheckbox(id uint32) Checkbox {
+	return Checkbox(id)
+}

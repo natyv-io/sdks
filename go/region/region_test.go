@@ -163,6 +163,23 @@ func TestRegionRoundTrip(t *testing.T) {
 		t.Fatalf("expected exactly one renderFolder(\"Inbox\") call, got %v", rebuildCalls)
 	}
 
+	// Real regression check for the deferred-reveal behavior: Restore alone
+	// must NOT have swapped anything yet -- every old child (region-owned or
+	// orphaned) is still present, and the new staging container is still
+	// hidden. See Restore/FlushPendingReveals' own doc comments for why the
+	// reveal is deferred at all.
+	preFlushChildren := world.children(rootID)
+	if len(preFlushChildren) != 4 {
+		t.Fatalf("expected all 3 old children plus the new staging container still present before FlushPendingReveals, got %v", preFlushChildren)
+	}
+	if world.visible[lastBuiltInto] {
+		t.Fatal("staging container should still be hidden before FlushPendingReveals")
+	}
+
+	if err := fresh.FlushPendingReveals(); err != nil {
+		t.Fatalf("FlushPendingReveals: %v", err)
+	}
+
 	// rootID's only surviving child is the fresh staging container the
 	// rebuild function was actually given -- every old child (region-owned
 	// or orphaned) is gone, not just the ones this registry tracked.

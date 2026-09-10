@@ -62,3 +62,29 @@ func (d *Dropdown) ID() uint32 { return d.menu.ID() }
 
 // Destroy destroys the underlying Menu (trigger and, if open, the panel).
 func (d *Dropdown) Destroy() { d.menu.Destroy() }
+
+// WrapDropdown reconstructs a *Dropdown for a pre-existing trigger widget
+// id -- mirrors CreateDropdown's own logic exactly (build the same
+// MenuItem list from options, wrap the underlying Menu, wire the same
+// relabel-then-call-through OnSelect), just via WrapMenu instead of
+// CreateMenu. See WrapMenu's own doc comment for the real caveats this
+// inherits (options must be the same list CreateDropdown was originally
+// given; an open-at-recycle-time panel stays orphaned).
+func WrapDropdown(triggerID uint32, options []string) *Dropdown {
+	items := make([]MenuItem, len(options))
+	for i, o := range options {
+		items[i] = MenuItem{Label: o}
+	}
+	menu := WrapMenu(triggerID, items)
+	d := &Dropdown{menu: menu, options: options}
+	menu.OnSelect(func(itemIndex, _ int) error {
+		if err := d.menu.trigger.SetLabel(d.options[itemIndex]); err != nil {
+			return err
+		}
+		if d.onSelect != nil {
+			return d.onSelect(itemIndex)
+		}
+		return nil
+	})
+	return d
+}
