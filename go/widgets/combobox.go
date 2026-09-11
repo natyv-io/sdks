@@ -22,6 +22,11 @@ type Combobox struct {
 	highlighted   int
 	query         string
 	onSelect      func(index int) error
+
+	// selected is the label selectOption last set the field's text to, kept
+	// until the next real keystroke consumes it -- see handleChange's own
+	// doc comment for why this exists and how it's used.
+	selected string
 }
 
 // CreateCombobox creates the typable TextField trigger. The filtered options
@@ -32,13 +37,47 @@ func CreateCombobox(layout Layout, placeholder string, options []string) (*Combo
 		return nil, err
 	}
 	c := &Combobox{field: field, options: options, highlighted: -1}
-	field.OnChange(func(text string) error {
-		c.highlighted = -1
-		return c.render(text)
-	})
+	field.OnChange(c.handleChange)
 	field.OnBlur(func(uint32) error { return c.close() })
 	field.OnKeyNav(c.onKeyNav)
 	return c, nil
+}
+
+// handleChange is the field's real OnChange handler -- factored out of
+// CreateCombobox/WrapCombobox since both need identical logic.
+//
+// Real, deliberate fix: TextField has no cursor/selection concept at all
+// (host-side, typing is always "append to the end" -- confirmed by reading
+// core/src/widgets/TextField.zig directly, not assumed), so the naive
+// version of this handler simply re-filtered the host's already-mutated
+// `text` as-is. That's correct for ordinary typing, but wrong immediately
+// after selectOption (below) sets the field's text to a full option label:
+// the very next keystroke appends onto that label instead of replacing it
+// (typing "alp" after selecting "Beta" produced "Betaalp", not "alp") --
+// exactly the field's real, host-driven append behavior, just not what a
+// combobox user expects right after a selection. `selected` records what
+// selectOption last set; the first OnChange whose text still carries it as
+// a strict prefix strips it back off (correcting the host's own buffer via
+// a real SetText call, which does not itself re-trigger OnChange --
+// confirmed via core/src/widgets/WidgetHostFunctions.zig's setTextHostFn,
+// a plain buffer mutation with no event dispatch) and treats only the
+// newly-typed suffix as the real query. One-shot by construction: consumed
+// unconditionally on first use, so every later keystroke behaves like an
+// ordinary TextField again until the next real selection.
+func (c *Combobox) handleChange(text string) error {
+	c.highlighted = -1
+	if c.selected != "" {
+		sel := c.selected
+		c.selected = ""
+		if strings.HasPrefix(text, sel) && len(text) > len(sel) {
+			query := text[len(sel):]
+			if err := c.field.SetText(query); err != nil {
+				return err
+			}
+			return c.render(query)
+		}
+	}
+	return c.render(text)
 }
 
 func (c *Combobox) onKeyNav(key string) error {
@@ -160,6 +199,7 @@ func (c *Combobox) selectOption(index int) error {
 	if err := c.field.SetText(label); err != nil {
 		return err
 	}
+	c.selected = label
 	if err := c.close(); err != nil {
 		return err
 	}
@@ -204,10 +244,7 @@ func (c *Combobox) Destroy() {
 func WrapCombobox(fieldID uint32, options []string) *Combobox {
 	field := WrapTextField(fieldID)
 	c := &Combobox{field: field, options: options, highlighted: -1}
-	field.OnChange(func(text string) error {
-		c.highlighted = -1
-		return c.render(text)
-	})
+	field.OnChange(c.handleChange)
 	field.OnBlur(func(uint32) error { return c.close() })
 	field.OnKeyNav(c.onKeyNav)
 	return c
