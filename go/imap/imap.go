@@ -205,6 +205,33 @@ type FetchItem struct {
 	Literal []byte
 }
 
+// parseUID extracts a "UID <n>" data item from a FETCH response's attrs
+// string (e.g. "(UID 12345 FLAGS (\Seen) ...)") -- present whenever UID was
+// requested among the fetched items, regardless of whether the issuing
+// command itself was UID FETCH or plain FETCH (the untagged response's own
+// leading number is always the message's sequence number either way; UID,
+// when requested, only ever shows up as a data item inside the parens --
+// confirmed against RFC 3501 §6.4.8, not assumed).
+func parseUID(attrs string) (int, bool) {
+	idx := strings.Index(attrs, "UID ")
+	if idx < 0 {
+		return 0, false
+	}
+	rest := attrs[idx+len("UID "):]
+	end := 0
+	for end < len(rest) && rest[end] >= '0' && rest[end] <= '9' {
+		end++
+	}
+	if end == 0 {
+		return 0, false
+	}
+	n, err := strconv.Atoi(rest[:end])
+	if err != nil {
+		return 0, false
+	}
+	return n, true
+}
+
 // parseFetchSeq splits "* 3 FETCH (...)" into (3, "(...)"); ok is false for
 // any other untagged line shape (e.g. "* 3 EXISTS", a SELECT response).
 func parseFetchSeq(line string) (seq int, rest string, ok bool) {
@@ -300,27 +327,42 @@ func parseHeaderBlock(raw []byte) []mailHeader {
 }
 
 // Message is one entry in a FetchHeaders result -- just enough to render an
-// inbox list. Seq is the message's sequence number within the currently
-// selected mailbox (not a stable UID -- use IMAP UIDs instead if a real
-// app needs identity across SELECTs, not implemented here).
+// inbox list. UID is the message's real, stable IMAP identity within this
+// mailbox -- unaffected by new mail arriving or another message being
+// expunged, unlike Seq. Use UID, not Seq, for anything that outlives the
+// FetchHeaders call itself (opening a message, deleting one): a real,
+// confirmed bug (2026-09-11) traced a garbled message-detail view back to
+// exactly this -- a row's Seq, captured at list time, pointed at a
+// completely different real message by the time it was clicked, because
+// new mail had arrived in between and shifted the mailbox's own numbering.
+// Seq is kept only as informational/positional data (which slot in the
+// fetched range this was), not a stable identifier.
 type Message struct {
 	Seq     int
+	UID     int
 	From    string
 	Subject string
 	Date    string
 	Seen    bool
 }
 
-// FetchHeaders fetches From/Subject/Date and the \Seen flag for message
-// sequence numbers from..to (inclusive) in the currently selected mailbox.
+// FetchHeaders fetches UID/From/Subject/Date and the \Seen flag for message
+// sequence numbers from..to (inclusive) in the currently selected mailbox
+// -- the range itself is still seq-based (pagination is inherently
+// positional: "the last N messages" has no UID-based expression), but UID
+// is requested alongside so each returned Message also carries its own
+// stable identity, safe to hold onto past this call.
 func (cl *Client) FetchHeaders(from, to int) ([]Message, error) {
-	items, err := cl.fetchCommand("FETCH " + strconv.Itoa(from) + ":" + strconv.Itoa(to) + " (FLAGS BODY[HEADER.FIELDS (FROM SUBJECT DATE)])")
+	items, err := cl.fetchCommand("FETCH " + strconv.Itoa(from) + ":" + strconv.Itoa(to) + " (UID FLAGS BODY[HEADER.FIELDS (FROM SUBJECT DATE)])")
 	if err != nil {
 		return nil, err
 	}
 	msgs := make([]Message, 0, len(items))
 	for _, it := range items {
 		m := Message{Seq: it.Seq, Seen: strings.Contains(it.Attrs, `\Seen`)}
+		if uid, ok := parseUID(it.Attrs); ok {
+			m.UID = uid
+		}
 		for _, h := range parseHeaderBlock(it.Literal) {
 			switch strings.ToLower(h.name) {
 			case "from":
@@ -336,10 +378,13 @@ func (cl *Client) FetchHeaders(from, to int) ([]Message, error) {
 	return msgs, nil
 }
 
-// FetchBody returns the plain-text body of message sequence number seq in
-// the currently selected mailbox.
-func (cl *Client) FetchBody(seq int) (string, error) {
-	items, err := cl.fetchCommand("FETCH " + strconv.Itoa(seq) + " (BODY[TEXT])")
+// FetchBody returns the plain-text body of the message identified by uid
+// (a stable IMAP UID, not a sequence number -- see Message's own doc
+// comment) in the currently selected mailbox. Uses UID FETCH specifically
+// so uid is interpreted as the real, stable identity rather than a
+// position that may no longer mean the same message.
+func (cl *Client) FetchBody(uid int) (string, error) {
+	items, err := cl.fetchCommand("UID FETCH " + strconv.Itoa(uid) + " (BODY[TEXT])")
 	if err != nil {
 		return "", err
 	}
@@ -349,16 +394,19 @@ func (cl *Client) FetchBody(seq int) (string, error) {
 	return string(items[0].Literal), nil
 }
 
-// Delete marks message sequence number seq as deleted and expunges it
-// immediately -- the standard IMAP way to remove a message
-// (STORE +FLAGS (\Deleted), then EXPUNGE). Real caveat, not something
-// this package can work around: against Gmail specifically, this archives
-// the message (removes it from the current mailbox's own view, moving it
-// to "All Mail") rather than permanently deleting it, the same behavior
-// every real IMAP client gets against Gmail without using its own
-// non-standard label extensions.
-func (cl *Client) Delete(seq int) error {
-	if _, err := cl.command("STORE " + strconv.Itoa(seq) + " +FLAGS (\\Deleted)"); err != nil {
+// Delete marks the message identified by uid (a stable IMAP UID, not a
+// sequence number -- see Message's own doc comment) as deleted and
+// expunges it immediately -- the standard IMAP way to remove a message
+// (UID STORE +FLAGS (\Deleted), then EXPUNGE). EXPUNGE itself has no UID
+// variant -- it always removes every \Deleted-flagged message in the
+// mailbox regardless of how they got flagged, unchanged from before. Real
+// caveat, not something this package can work around: against Gmail
+// specifically, this archives the message (removes it from the current
+// mailbox's own view, moving it to "All Mail") rather than permanently
+// deleting it, the same behavior every real IMAP client gets against
+// Gmail without using its own non-standard label extensions.
+func (cl *Client) Delete(uid int) error {
+	if _, err := cl.command("UID STORE " + strconv.Itoa(uid) + " +FLAGS (\\Deleted)"); err != nil {
 		return err
 	}
 	_, err := cl.command("EXPUNGE")
