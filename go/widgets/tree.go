@@ -327,6 +327,36 @@ type TreeSnapshot struct {
 	TopSpacer    uint32
 	BottomSpacer uint32
 	RowPool      []uint32
+	// Real scalar state, widened in alongside the pool's own widget ids
+	// (Part 2, codegen automation), same reasoning as TableSnapshot's own
+	// widening -- Snapshot() reads the *live* current value, not whatever
+	// CreateTree was originally given, since natyv's own window-resize
+	// support means viewportHeight in particular isn't guaranteed to have
+	// stayed at its original authored value by the time a recycle happens.
+	ViewportHeight float32
+	RowHeight      float32
+	ScrollOffsetY  float32
+}
+
+// Snapshot reads this Tree's own current pool ids and scalar state back
+// out, in exactly the shape WrapTree expects to receive them in -- the
+// real producer half of TreeSnapshot, letting a caller reattach this
+// exact Tree after a recycle without hand-tracking any of it itself
+// (roots is the one exception -- see WrapTree's own doc comment for why
+// that stays the caller's responsibility).
+func (t *Tree) Snapshot() TreeSnapshot {
+	rowPoolIDs := make([]uint32, len(t.rowPool))
+	for i, b := range t.rowPool {
+		rowPoolIDs[i] = uint32(b)
+	}
+	return TreeSnapshot{
+		TopSpacer:      uint32(t.topSpacer),
+		BottomSpacer:   uint32(t.bottomSpacer),
+		RowPool:        rowPoolIDs,
+		ViewportHeight: t.viewportHeight,
+		RowHeight:      t.rowHeight,
+		ScrollOffsetY:  t.lastScrollOffsetY,
+	}
 }
 
 // WrapTree reconstructs a *Tree for a pre-existing viewport widget id and
@@ -336,30 +366,31 @@ type TreeSnapshot struct {
 // by both since Tree's own doc comment says Table reuses this exact
 // virtualization technique directly).
 //
-// roots/rowHeight/viewportHeight must be the same values CreateTree was
-// originally given -- roots carries each node's own live Expanded state,
-// so a caller that wants expand/collapse state to survive a recycle is
-// responsible for persisting and restoring the whole roots tree itself
-// (guest-side data, not host-side, same reasoning as Menu's own entries
-// param). selected is deliberately not a param -- it resets to nil here
-// (no node selected), the same way Table's own selected already resets
-// on every sort in the original, non-recycling code: it's used only for
-// the "*" cosmetic marker, and plumbing a "which node was selected"
-// identifier through would be disproportionate to what's lost. scrollOffsetY
-// lets a caller restore the prior scroll position; pass 0 to reset to the
-// top, matching CreateTree's own initial render(0) call.
+// roots must be the same value CreateTree was originally given -- it
+// carries each node's own live Expanded state, so a caller that wants
+// expand/collapse state to survive a recycle is responsible for
+// persisting and restoring the whole roots tree itself (guest-side data,
+// not host-side, same reasoning as Menu's own entries param).
+// rowHeight/viewportHeight/scrollOffsetY all now live on TreeSnapshot
+// itself -- Snapshot() produces a real one straight off a live *Tree, so
+// a caller doesn't need to separately track and pass any of them. selected
+// is deliberately not a param -- it resets to nil here (no node selected),
+// the same way Table's own selected already resets on every sort in the
+// original, non-recycling code: it's used only for the "*" cosmetic
+// marker, and plumbing a "which node was selected" identifier through
+// would be disproportionate to what's lost.
 //
-// Ends by calling render(scrollOffsetY) -- the same function CreateTree
-// itself calls to populate the pool initially, and the only place any
-// row's own OnClick gets registered (see render's own doc comment) -- so
-// this one call is what actually reattaches every visible row's click
-// handler.
-func WrapTree(viewportID uint32, snap TreeSnapshot, roots []*TreeNode, rowHeight, viewportHeight, scrollOffsetY float32) (*Tree, error) {
+// Ends by calling render(snap.ScrollOffsetY) -- the same function
+// CreateTree itself calls to populate the pool initially, and the only
+// place any row's own OnClick gets registered (see render's own doc
+// comment) -- so this one call is what actually reattaches every visible
+// row's click handler.
+func WrapTree(viewportID uint32, snap TreeSnapshot, roots []*TreeNode) (*Tree, error) {
 	t := &Tree{
 		viewport:       Container(viewportID),
-		viewportHeight: viewportHeight,
+		viewportHeight: snap.ViewportHeight,
 		roots:          roots,
-		rowHeight:      rowHeight,
+		rowHeight:      snap.RowHeight,
 		topSpacer:      Container(snap.TopSpacer),
 		bottomSpacer:   Container(snap.BottomSpacer),
 	}
@@ -371,7 +402,7 @@ func WrapTree(viewportID uint32, snap TreeSnapshot, roots []*TreeNode, rowHeight
 	internal.RegisterScroll(uint32(t.viewport), func(_, offsetY float32) error {
 		return t.onScroll(offsetY)
 	})
-	if err := t.render(scrollOffsetY); err != nil {
+	if err := t.render(snap.ScrollOffsetY); err != nil {
 		return nil, err
 	}
 	return t, nil

@@ -353,6 +353,50 @@ type TableSnapshot struct {
 	BottomSpacer uint32
 	RowPool      []uint32
 	CellPool     [][]uint32
+	// Real scalar state, widened in alongside the pool's own widget ids
+	// (Part 2, codegen automation) so a caller reattaching this Table
+	// doesn't need to separately track and pass these five values itself
+	// -- Snapshot() reads them straight off the live *Table.
+	ViewportHeight float32
+	RowHeight      float32
+	SortCol        int
+	SortAsc        bool
+	ScrollOffsetY  float32
+}
+
+// Snapshot reads this Table's own current pool ids and scalar state back
+// out, in exactly the shape WrapTable expects to receive them in -- the
+// real producer half of TableSnapshot, letting a caller reattach this
+// exact Table after a recycle without hand-tracking any of it itself.
+func (t *Table) Snapshot() TableSnapshot {
+	headerBtnIDs := make([]uint32, len(t.headerBtns))
+	for i, b := range t.headerBtns {
+		headerBtnIDs[i] = uint32(b)
+	}
+	rowPoolIDs := make([]uint32, len(t.rowPool))
+	cellPoolIDs := make([][]uint32, len(t.rowPool))
+	for k, row := range t.rowPool {
+		rowPoolIDs[k] = uint32(row)
+		cells := make([]uint32, len(t.cellPool[k]))
+		for c, cell := range t.cellPool[k] {
+			cells[c] = uint32(cell)
+		}
+		cellPoolIDs[k] = cells
+	}
+	return TableSnapshot{
+		Header:         uint32(t.header),
+		HeaderBtns:     headerBtnIDs,
+		Viewport:       uint32(t.viewport),
+		TopSpacer:      uint32(t.topSpacer),
+		BottomSpacer:   uint32(t.bottomSpacer),
+		RowPool:        rowPoolIDs,
+		CellPool:       cellPoolIDs,
+		ViewportHeight: t.viewportHeight,
+		RowHeight:      t.rowHeight,
+		SortCol:        t.sortCol,
+		SortAsc:        t.sortAsc,
+		ScrollOffsetY:  t.lastScrollOffsetY,
+	}
 }
 
 // WrapTable reconstructs a *Table for a pre-existing wrapper widget id and
@@ -367,29 +411,35 @@ type TableSnapshot struct {
 //
 // columns/rows/rowHeight/viewportHeight must be the same values
 // CreateTable was originally given (rows should reflect whatever order
-// it was last sorted into, if the caller wants that to survive -- sortCol/
-// sortAsc are for the header's own "^"/"v" label marker only, they don't
-// re-sort rows themselves). scrollOffsetY lets a caller restore the prior
-// scroll position; pass 0 to just reset to the top, matching CreateTable's
-// own initial render(0) call.
+// it was last sorted into, if the caller wants that to survive -- snap's
+// own SortCol/SortAsc are for the header's own "^"/"v" label marker only,
+// they don't re-sort rows themselves). snap's own ScrollOffsetY lets a
+// caller restore the prior scroll position -- build a zeroed TableSnapshot
+// with ScrollOffsetY left at 0 to just reset to the top, matching
+// CreateTable's own initial render(0) call.
 //
-// Ends by calling render(scrollOffsetY) -- the same function CreateTable
-// itself calls to populate the pool initially, and the *only* place any
-// row's own OnClick gets registered at all (see render's own doc
-// comment) -- so this one call is what actually reattaches every visible
-// row's click handler, not a separate mechanism.
-func WrapTable(wrapperID uint32, snap TableSnapshot, columns []Column, rows [][]string, rowHeight, viewportHeight, scrollOffsetY float32, sortCol int, sortAsc bool) (*Table, error) {
+// viewportHeight/rowHeight/scrollOffsetY/sortCol/sortAsc all now live on
+// TableSnapshot itself (Part 2, codegen automation) -- Snapshot() produces
+// a real one straight off a live *Table, so a caller reattaching this
+// exact Table doesn't need to separately track and pass any of them.
+//
+// Ends by calling render(snap.ScrollOffsetY) -- the same function
+// CreateTable itself calls to populate the pool initially, and the *only*
+// place any row's own OnClick gets registered at all (see render's own
+// doc comment) -- so this one call is what actually reattaches every
+// visible row's click handler, not a separate mechanism.
+func WrapTable(wrapperID uint32, snap TableSnapshot, columns []Column, rows [][]string) (*Table, error) {
 	t := &Table{
 		wrapper:        Container(wrapperID),
 		header:         Container(snap.Header),
 		viewport:       Container(snap.Viewport),
-		viewportHeight: viewportHeight,
+		viewportHeight: snap.ViewportHeight,
 		columns:        columns,
 		rows:           rows,
-		rowHeight:      rowHeight,
+		rowHeight:      snap.RowHeight,
 		selected:       -1,
-		sortCol:        sortCol,
-		sortAsc:        sortAsc,
+		sortCol:        snap.SortCol,
+		sortAsc:        snap.SortAsc,
 		topSpacer:      Container(snap.TopSpacer),
 		bottomSpacer:   Container(snap.BottomSpacer),
 	}
@@ -419,7 +469,7 @@ func WrapTable(wrapperID uint32, snap TableSnapshot, columns []Column, rows [][]
 	internal.RegisterScroll(uint32(t.viewport), func(_, offsetY float32) error {
 		return t.onScroll(offsetY)
 	})
-	if err := t.render(scrollOffsetY); err != nil {
+	if err := t.render(snap.ScrollOffsetY); err != nil {
 		return nil, err
 	}
 	return t, nil
