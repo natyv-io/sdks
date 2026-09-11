@@ -149,3 +149,16 @@ func WrapBreadcrumbs(rootID uint32, buttonIDs []uint32) Breadcrumbs {
 	}
 	return b
 }
+
+// ButtonIDs returns this breadcrumb trail's own crumb-button ids, in the
+// same order WrapBreadcrumbs' own buttonIDs parameter expects them back
+// in -- there's no host "list this container's children" primitive, so a
+// caller reattaching this Breadcrumbs after a recycle must persist and
+// supply this list itself.
+func (b Breadcrumbs) ButtonIDs() []uint32 {
+	ids := make([]uint32, len(b.buttons))
+	for i, btn := range b.buttons {
+		ids[i] = uint32(btn)
+	}
+	return ids
+}

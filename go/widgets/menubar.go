@@ -121,3 +121,16 @@ func WrapMenuBar(barID uint32, triggerIDs []uint32, entries []MenuBarEntry) *Men
 	}
 	return mb
 }
+
+// TriggerIDs returns this bar's own top-level trigger ids, in the same
+// order WrapMenuBar's own triggerIDs parameter expects them back in --
+// there's no host "list this container's children" primitive, so a
+// caller reattaching this MenuBar after a recycle must persist and supply
+// this list itself, the same way it must for entries/itemWidth/itemHeight.
+func (mb *MenuBar) TriggerIDs() []uint32 {
+	ids := make([]uint32, len(mb.menus))
+	for i, m := range mb.menus {
+		ids[i] = m.ID()
+	}
+	return ids
+}

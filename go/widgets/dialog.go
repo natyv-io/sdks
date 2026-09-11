@@ -148,3 +148,16 @@ func WrapDialog(rootID uint32, buttonIDs []uint32, buttonLabels []string) Dialog
 	})
 	return d
 }
+
+// ButtonIDs returns this dialog's own button ids, in the same order
+// WrapDialog's own buttonIDs parameter expects them back in -- there's no
+// host "list this container's children" primitive, so a caller
+// reattaching this Dialog after a recycle must persist and supply this
+// list itself, alongside buttonLabels.
+func (d Dialog) ButtonIDs() []uint32 {
+	ids := make([]uint32, len(d.buttons))
+	for i, b := range d.buttons {
+		ids[i] = uint32(b)
+	}
+	return ids
+}

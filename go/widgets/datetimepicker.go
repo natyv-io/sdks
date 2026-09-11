@@ -437,3 +437,14 @@ func WrapDateTimePicker(triggerID uint32, year, month, hour, minute int) *DateTi
 	trigger.OnBlur(p.onBlur)
 	return p
 }
+
+// CurrentValue returns this picker's own live year/month/hour/minute --
+// unlike every other tier-1/2 kind's extra WrapX argument, this is real
+// *runtime* state (the user's current in-progress selection), not a fixed
+// creation-time shape, so a caller reattaching this DateTimePicker after
+// a recycle must have separately persisted and restored it (the same
+// "live app state, calling app's own responsibility" pattern Mechanism 1
+// covers for a plain ref='d value).
+func (p *DateTimePicker) CurrentValue() (year, month, hour, minute int) {
+	return p.year, p.month, p.hour, p.minute
+}
