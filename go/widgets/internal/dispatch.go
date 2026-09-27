@@ -133,6 +133,17 @@ func RegisterWindowCloseRequested(id uint32, handler func() error) {
 	windowCloseRequestedHandlers[id] = handler
 }
 
+// eventTypeHandlers routes whole event types that aren't widget events --
+// `hid_report`/`hid_disconnected` today -- to the sibling SDK package that
+// owns them. Keyed by type rather than id: the owning package keeps its own
+// id->handler table, so this router never learns what a HID handle is.
+// Checked only after every built-in type above has been ruled out.
+var eventTypeHandlers = map[string]func(id uint32, payload string) error{}
+
+func RegisterEventType(eventType string, handler func(id uint32, payload string) error) {
+	eventTypeHandlers[eventType] = handler
+}
+
 // PostDispatchHook, if set, is called at the very start of every real
 // natyv_dispatch call, before the event itself is handled. Exported so the
 // sibling `widgets` package (the only thing outside this `internal` package
@@ -327,6 +338,11 @@ func natyvDispatchExport() int32 {
 				pdk.SetErrorString(err.Error())
 				return 1
 			}
+		}
+	} else if handler, ok := eventTypeHandlers[event.EventType]; ok {
+		if err := handler(event.WidgetID, event.Payload); err != nil {
+			pdk.SetErrorString(err.Error())
+			return 1
 		}
 	}
 

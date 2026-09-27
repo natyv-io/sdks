@@ -12,3 +12,13 @@ import "github.com/natyv-io/sdks/go/widgets/internal"
 func SetPostDispatchHook(fn func()) {
 	internal.PostDispatchHook = fn
 }
+
+// HandleEventType routes every dispatched event of eventType to fn, with
+// the id it was addressed to and its raw JSON payload. For sibling SDK
+// packages whose events aren't widget events (the `hid` package's
+// `hid_report`/`hid_disconnected`) -- same internal-package bridge as
+// SetPostDispatchHook. App code has no reason to call this: those packages
+// register themselves and expose typed handlers instead.
+func HandleEventType(eventType string, fn func(id uint32, payload string) error) {
+	internal.RegisterEventType(eventType, fn)
+}
