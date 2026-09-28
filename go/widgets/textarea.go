@@ -11,8 +11,10 @@ import (
 //go:wasmimport extism:host/user natyv_clay_create_textarea
 func natyvClayCreateTextAreaHost(uint64) uint64
 
-// TextArea is TextField's multi-line sibling. Same append/backspace-at-the-
-// end-only model as TextField (no arbitrary cursor position); Enter inserts
+// TextArea is TextField's multi-line sibling. Both support a real host-side
+// cursor and selection (click/click-drag/shift+arrow to select, Cmd/Ctrl+
+// C/X/V to copy/cut/paste) -- entirely host-side, invisible to the guest
+// beyond OnChange firing with whatever the resulting text is. Enter inserts
 // a literal newline instead of TextField's "select the highlighted combobox
 // option" meaning, handled entirely host-side -- nothing extra for the
 // guest to do, a newline just arrives as part of the same OnChange text a

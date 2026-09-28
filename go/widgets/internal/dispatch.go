@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 
 	"github.com/extism/go-pdk"
+
+	"github.com/natyv-io/sdks/go/widgets/internal/drawing"
 )
 
 // clickHandlers is the in-guest id->handler table the host-runtime event
@@ -133,6 +135,38 @@ func RegisterWindowCloseRequested(id uint32, handler func() error) {
 	windowCloseRequestedHandlers[id] = handler
 }
 
+// canvasClickHandlers is Canvas's OnClick -- its own table and signature,
+// like rangeChangeHandlers, since a canvas click carries where it landed
+// (`{"x":f,"y":f}`, relative to the canvas) and every other kind's click
+// carries nothing. A widget id is only ever one kind, so natyvDispatchExport
+// checking clickHandlers first is unambiguous.
+var canvasClickHandlers = map[uint32]func(x, y float32) error{}
+
+func RegisterCanvasClick(id uint32, handler func(x, y float32) error) {
+	canvasClickHandlers[id] = handler
+}
+
+// canvasResizeHandlers is Canvas's OnResize -- fired on a canvas's first
+// layout and on every change to its laid-out size, so the guest can redraw
+// to fit. Coalesced host-side like OnScroll: a window drag-resize changes
+// the size every frame, and only the latest one matters.
+var canvasResizeHandlers = map[uint32]func(w, h float32) error{}
+
+func RegisterCanvasResize(id uint32, handler func(w, h float32) error) {
+	canvasResizeHandlers[id] = handler
+}
+
+// eventTypeHandlers routes whole event types that aren't widget events --
+// `hid_report`/`hid_disconnected` today -- to the sibling SDK package that
+// owns them. Keyed by type rather than id: the owning package keeps its own
+// id->handler table, so this router never learns what a HID handle is.
+// Checked only after every built-in type above has been ruled out.
+var eventTypeHandlers = map[string]func(id uint32, payload string) error{}
+
+func RegisterEventType(eventType string, handler func(id uint32, payload string) error) {
+	eventTypeHandlers[eventType] = handler
+}
+
 // PostDispatchHook, if set, is called at the very start of every real
 // natyv_dispatch call, before the event itself is handled. Exported so the
 // sibling `widgets` package (the only thing outside this `internal` package
@@ -216,6 +250,16 @@ func natyvDispatchExport() int32 {
 	if event.EventType == "click" {
 		if handler, ok := clickHandlers[event.WidgetID]; ok {
 			if err := handler(); err != nil {
+				pdk.SetErrorString(err.Error())
+				return 1
+			}
+		} else if handler, ok := canvasClickHandlers[event.WidgetID]; ok {
+			x, y, err := drawing.ParseClick(event.Payload)
+			if err != nil {
+				pdk.SetErrorString(err.Error())
+				return 1
+			}
+			if err := handler(x, y); err != nil {
 				pdk.SetErrorString(err.Error())
 				return 1
 			}
@@ -327,6 +371,23 @@ func natyvDispatchExport() int32 {
 				pdk.SetErrorString(err.Error())
 				return 1
 			}
+		}
+	} else if event.EventType == "canvas_resized" {
+		if handler, ok := canvasResizeHandlers[event.WidgetID]; ok {
+			w, h, err := drawing.ParseResize(event.Payload)
+			if err != nil {
+				pdk.SetErrorString(err.Error())
+				return 1
+			}
+			if err := handler(w, h); err != nil {
+				pdk.SetErrorString(err.Error())
+				return 1
+			}
+		}
+	} else if handler, ok := eventTypeHandlers[event.EventType]; ok {
+		if err := handler(event.WidgetID, event.Payload); err != nil {
+			pdk.SetErrorString(err.Error())
+			return 1
 		}
 	}
 

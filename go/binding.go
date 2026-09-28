@@ -44,6 +44,10 @@ func RegisterHandlerFunc(kind string, fn func(widgetID uint32, args json.RawMess
 // atomically alongside the real handler registration -- call this
 // directly only for a widget kind those don't cover yet. args must be
 // JSON-marshalable; this only serializes it, it never inspects it.
+//
+// A widget holds one binding: a later call for the same widgetID replaces
+// the earlier one. A widget with several handlers (a Canvas's OnResize and
+// OnClick) needs one kind whose function reattaches all of them.
 func RegisterBinding(widgetID uint32, kind string, args any) error {
 	return bindingRegistry.RegisterBinding(widgetID, kind, args)
 }
